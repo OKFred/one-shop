@@ -26,6 +26,12 @@ data, images, environment files and receiving instructions are mounted at runtim
 6. Run `node deployment/verify-baseline.mjs --baseline /private/before.private.json`.
    No lost or new orders, changed historic money, stock, payment receipts,
    credentials or shipment state are accepted. New columns are allowed.
+   Exact native provider status aliases are accepted only with the original
+   provider and migration-version proof (for example Stripe failed remains
+   failed under its new provider-specific name). New CMS paths must derive
+   exactly from original page UUIDs and URL keys; existing paths and CMS
+   content remain protected. Older baselines lacking CMS hashes must be
+   recaptured read-only from the original backup copy.
 7. Check pages, category/product paths, redirects, mobile layout, icons offline,
    account-owned order payment links and an existing confirmed quote. Run only
    synthetic payment transitions in the dedicated test database; never register

@@ -29,6 +29,8 @@ const tablePolicies = [
   { name: 'categoryIdentities', table: 'category', keys: ['category_id', 'uuid'], fields: ['category_id', 'uuid', 'parent_id', 'status'], values: ['category_id', 'uuid', 'parent_id', 'status'], required: true },
   { name: 'productPaths', table: 'product_description', keys: ['product_description_product_id'], fields: ['product_description_product_id', 'url_key'], values: ['product_description_product_id', 'url_key'], required: true },
   { name: 'categoryPaths', table: 'category_description', keys: ['category_description_category_id'], fields: ['category_description_category_id', 'url_key'], values: ['category_description_category_id', 'url_key'], required: true },
+  { name: 'cmsPages', table: 'cms_page', keys: ['cms_page_id', 'uuid'], values: ['cms_page_id', 'uuid', 'status'], required: true },
+  { name: 'cmsDescriptions', table: 'cms_page_description', keys: ['cms_page_description_id', 'cms_page_description_cms_page_id'], values: ['cms_page_description_id', 'cms_page_description_cms_page_id', 'url_key'], required: true },
   { name: 'urlRewrites', table: 'url_rewrite', keys: ['url_rewrite_id'], fields: ['url_rewrite_id', 'request_path', 'target_path', 'entity_uuid', 'entity_type'], values: ['url_rewrite_id', 'request_path', 'target_path', 'entity_uuid', 'entity_type'], required: true },
   { name: 'paymentTransactions', table: 'payment_transaction', keys: ['payment_transaction_id', 'uuid'], required: true },
   { name: 'quotes', table: 'shusha_payment_quote', keys: ['order_id'] },
@@ -91,7 +93,9 @@ export async function captureDatabase(client, { sourceVersion = '1.2.2', baselin
     const shipmentTypes = await tableColumns(client, 'shipment');
     assert(Object.keys(shipmentTypes).length > 0, 'Native shipment table is missing');
     const shipments = (await client.query(`SELECT ${projection(Object.keys(shipmentTypes), shipmentTypes)} FROM shipment ORDER BY shipment_id`)).rows;
-    const snapshot = { schemaVersion: 1, capturedAt: new Date().toISOString(), sourceVersion, tables, nativeShipments: { orders: nativeOrders, shipments } };
+    const migrationTypes = await tableColumns(client, 'migration');
+    const nativeMigrations = Object.keys(migrationTypes).length ? (await client.query('SELECT module,version FROM migration ORDER BY module')).rows : [];
+    const snapshot = { schemaVersion: 1, capturedAt: new Date().toISOString(), sourceVersion, tables, nativeMigrations, nativeShipments: { orders: nativeOrders, shipments } };
     snapshot.contentSha256 = hash(snapshot);
     await client.query('COMMIT'); transaction = false;
     return snapshot;
