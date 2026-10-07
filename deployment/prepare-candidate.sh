@@ -9,6 +9,8 @@ old=${SHUSHA_OLD_CONTAINER:-evershop}
 pg=${SHUSHA_POSTGRES_CONTAINER:-pg}
 db=${SHUSHA_CANDIDATE_DB:-shusha_v2_candidate}
 network=${SHUSHA_DOCKER_NETWORK:-MyEverShop}
+preview_host=${SHUSHA_PREVIEW_BIND_HOST:-127.0.0.1}
+[[ "$preview_host" == 127.0.0.1 || "$preview_host" =~ ^192\.168\.[0-9]+\.[0-9]+$ || "$preview_host" =~ ^10\.[0-9]+\.[0-9]+\.[0-9]+$ ]]
 [[ "$db" =~ ^[a-z][a-z0-9_]*_candidate$ ]]
 test -s "$backup/database.dump"
 test -f "$release/source/deployment/config.shusha.json"
@@ -69,7 +71,7 @@ docker exec "$pg" createdb -U postgres "$db"
 docker exec -i "$pg" pg_restore -U postgres -d "$db" --exit-on-error < "$backup/database.dump"
 docker create --name evershop-v2-candidate --network "$network" \
   --env-file "$release/candidate.env" --workdir /app --restart no \
-  -p 127.0.0.1:5444:3000 \
+  -p "$preview_host:5444:3000" \
   -v "$release/config-candidate:/app/config:ro" \
   -v "$release/private-candidate:/private" \
   -v "$release/data-candidate:/app/data" \

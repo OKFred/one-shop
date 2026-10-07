@@ -23,6 +23,13 @@ Wise link never confirms a payment. Actual receipt confirmation is an explicit
 admin action with exact amount, currency, quote revision and unique bank receipt
 reference, committed with the native payment transition in one transaction.
 Neither quote confirmation nor receipt registration sends customer messages.
+EverShop's automatic order confirmation, customer welcome, shipment-created and
+shipment-delivered notifications are disabled through its native
+`system.notification_emails.<type>.enabled=false` settings. The extension sets
+these defaults and fails startup if configuration enables any of them. Native
+stock and catalog event subscribers remain intact. No replacement email service
+reports a suppressed notification as sent. Customer-initiated password resets
+are a separate native flow.
 
 ## Customer access and icons
 
