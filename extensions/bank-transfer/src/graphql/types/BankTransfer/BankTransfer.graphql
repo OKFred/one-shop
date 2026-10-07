@@ -1,0 +1,6 @@
+extend type Setting {
+  bankTransferPaymentStatus: Int
+  bankTransferDisplayName: String
+  bankTransferContactSriLanka: String
+  bankTransferContactChina: String
+}

@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "currency": {"type": "string", "enum": ["GBP", "EUR", "USD"]},
+    "amount": {"type": "string", "pattern": "^(0|[1-9][0-9]{0,9})(\\.[0-9]{1,2})?$"},
+    "receiptReference": {"type": "string", "minLength": 3, "maxLength": 120},
+    "quoteRevision": {"type": "integer", "minimum": 1},
+    "receivedConfirmed": {"type": "boolean", "const": true}
+  },
+  "required": ["currency", "amount", "receiptReference", "quoteRevision", "receivedConfirmed"]
+}

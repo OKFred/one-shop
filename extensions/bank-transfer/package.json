@@ -1,0 +1,14 @@
+{
+  "name": "@shusha/bank-transfer",
+  "version": "2.0.0",
+  "type": "module",
+  "private": true,
+  "license": "GPL-3.0-only",
+  "description": "Pending SHUSHA order requests with manual shipping and verified Wise receipts",
+  "exports": { "./components/BrandIcon": "./dist/components/BrandIcon.js" },
+  "scripts": {
+    "build": "swc src -d dist --config-file .swcrc --copy-files --strip-leading-paths",
+    "test": "npm run build && node --test tests/*.test.mjs",
+    "test:integration": "node tests/integration.mjs"
+  }
+}

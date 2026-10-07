@@ -1,35 +1,14 @@
 {
-  "shop": {
-    "currency": "USD"
-  },
-  "retailPricing": {
-    "enabled": true,
-    "multiplier": "1.1"
-  },
-  "themeConfig": {
-    "copyRight": "© 2026 SHUSHA"
-  },
+  "shop": { "currency": "USD" },
+  "retailPricing": { "enabled": true, "multiplier": "1.1" },
+  "themeConfig": { "copyRight": "© 2026 SHUSHA" },
   "system": {
     "file_storage": "local",
     "extensions": [
-      {
-        "name": "retail-pricing",
-        "resolve": "extensions/retail-pricing",
-        "enabled": true,
-        "priority": 100
-      },
-      {
-        "name": "storefront-identity",
-        "resolve": "extensions/storefront-identity",
-        "enabled": true,
-        "priority": 110
-      },
-      {
-        "name": "storefront-brand",
-        "resolve": "extensions/storefront-brand",
-        "enabled": true,
-        "priority": 120
-      }
+      { "name": "bank-transfer", "resolve": "extensions/bank-transfer", "enabled": true, "priority": 30 },
+      { "name": "retail-pricing", "resolve": "extensions/retail-pricing", "enabled": true, "priority": 100 },
+      { "name": "storefront-identity", "resolve": "extensions/storefront-identity", "enabled": true, "priority": 110 },
+      { "name": "storefront-brand", "resolve": "extensions/storefront-brand", "enabled": true, "priority": 120 }
     ],
     "jobs": []
   }

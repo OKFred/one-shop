@@ -1,0 +1,36 @@
+type BankTransferBankDetail {
+  label: String!
+  value: String!
+}
+
+type BankTransferQuote {
+  status: String!
+  revision: Int!
+  currency: String!
+  amount: String!
+  merchandiseUsd: String!
+  reference: String!
+  wisePaymentUrl: String
+  bankDetails: [BankTransferBankDetail!]!
+  receiptConfirmedAt: String
+  shippingDeferred: Boolean!
+}
+
+extend type Order {
+  bankTransferQuote: BankTransferQuote
+  bankTransferPaymentUrl: String
+}
+
+# This bearer-link type excludes names, email, addresses and order items.
+type BankTransferPaymentOrder {
+  orderNumber: String!
+  paymentMethod: String!
+  bankTransferQuote: BankTransferQuote
+  bankTransferPaymentUrl: String!
+}
+
+extend type Query {
+  bankTransferPaymentOrder: BankTransferPaymentOrder
+  bankTransferCustomerPaymentOrder(uuid: String!): BankTransferPaymentOrder
+  bankTransferCustomerPayments: [BankTransferPaymentOrder!]!
+}

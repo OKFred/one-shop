@@ -1,0 +1,9 @@
+type BankTransferReceivingConfig {
+  ready: Boolean!
+  currencies: [String!]!
+  openLinkReady: Boolean!
+}
+
+extend type Query {
+  bankTransferReceivingConfig: BankTransferReceivingConfig!
+}

@@ -1,0 +1,38 @@
+.shusha-payment-panel {
+  display: grid;
+  gap: 1.5rem;
+
+  .shusha-payment-amount {
+    padding: 1.5rem;
+    border: 1px solid #d5d8d0;
+    border-radius: 0.5rem;
+    background: #f6f7f3;
+    display: grid;
+    gap: 0.5rem;
+
+    > strong { font-size: 2rem; line-height: 1.25; }
+    &.received { border-color: #b6d0b9; background: #f0f7f0; }
+  }
+
+  .shusha-wise-payment {
+    display: grid;
+    gap: 0.75rem;
+    .button { justify-self: start; }
+  }
+
+  .shusha-bank-backup {
+    display: grid;
+    gap: 1rem;
+    dl { margin: 0; }
+    dl > div { display: grid; grid-template-columns: minmax(8rem, 1fr) minmax(0, 2fr); gap: 0.75rem; padding: 0.75rem 0; border-bottom: 1px solid #e2e4df; }
+    dt { color: #62655e; }
+    dd { margin: 0; overflow-wrap: anywhere; font-weight: 600; }
+  }
+
+  .shusha-payment-status { padding: 1rem; border-left: 3px solid #8d946e; background: #fafaf8; }
+
+  @media (max-width: 480px) {
+    .shusha-bank-backup dl > div { grid-template-columns: 1fr; gap: 0.25rem; }
+    .shusha-wise-payment .button { justify-self: stretch; text-align: center; }
+  }
+}
