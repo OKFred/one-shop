@@ -23,13 +23,13 @@ test -d "$shared" && test -d "$media" && test -f "$wise/receiving.json"
 test -z "$(find "$shared/jobs" -maxdepth 1 -name '*.lock' -print)"
 test ! -e "$shared/.adapter.lock"
 mkdir -p "$release/media-candidate" "$release/data-candidate/material-library" \
-  "$release/private-candidate" "$release/config-candidate" "$release/assets-candidate"
+  "$release/private-candidate" "$release/config-candidate"
 chmod 700 "$release/private-candidate" "$release/data-candidate"
 cp -a "$media/." "$release/media-candidate/"
 cp -a "$shared/." "$release/data-candidate/material-library/"
 cp -a "$wise/receiving.json" "$release/private-candidate/receiving.json"
 chmod 600 "$release/private-candidate/receiving.json"
-docker cp "$old:/app/public/assets/shusha/." "$release/assets-candidate/"
+test -s "$release/media-candidate/shusha/shusha-wordmark.svg"
 cp "$release/source/deployment/config.shusha.json" "$release/config-candidate/default.json"
 cp "$release/source/deployment/config.shusha.json" "$release/config-candidate/production.json"
 docker inspect "$old" --format '{{json .Config.Env}}' | python3 -c '
@@ -57,7 +57,6 @@ docker create --name evershop-v2-candidate --network "$network" \
   -v "$release/private-candidate:/private" \
   -v "$release/data-candidate:/app/data" \
   -v "$release/media-candidate:/app/media" \
-  -v "$release/assets-candidate:/app/public/assets/shusha:ro" \
   "$image" sleep infinity
 docker start evershop-v2-candidate
 docker exec evershop-v2-candidate node deployment/capture-baseline.mjs --output /private/before.private.json
