@@ -33,10 +33,11 @@ test -s "$release/media-candidate/shusha/shusha-wordmark.svg"
 cp "$release/source/deployment/config.shusha.json" "$release/config-candidate/default.json"
 cp "$release/source/deployment/config.shusha.json" "$release/config-candidate/production.json"
 docker inspect "$old" --format '{{json .Config.Env}}' | python3 -c '
-import json,sys,os
+import json,sys,os,secrets
 old=dict(x.split("=",1) for x in json.load(sys.stdin))
 # Carry only necessary application secrets, never image/build environment.
-names=["DB_HOST","DB_PORT","DB_USER","DB_PASSWORD","COOKIE_SECRET","SESSION_SECRET"]
+names=["DB_HOST","DB_PORT","DB_USER","DB_PASSWORD","COOKIE_SECRET","SESSION_SECRET",
+       "JWT_ADMIN_SECRET","JWT_ADMIN_REFRESH_SECRET","JWT_CUSTOMER_SECRET","JWT_CUSTOMER_REFRESH_SECRET"]
 new={key:old[key] for key in names if key in old}
 new.update(DB_NAME=sys.argv[2],PORT="3000",TZ="Asia/Shanghai",NODE_ENV="production",
     EVERSHOP_HOME_URL="http://localhost:5444",PRIVATE_DATA_DIR="/app/data",
@@ -45,6 +46,8 @@ new.update(DB_NAME=sys.argv[2],PORT="3000",TZ="Asia/Shanghai",NODE_ENV="producti
     SHUSHA_WISE_RECEIVING_CONFIG="/private/receiving.json",
     SUUSHA_PRICE_API_URL="https://suusha.com/Excel/api.php")
 assert all(new.get(key) for key in ["DB_HOST","DB_USER","DB_PASSWORD"])
+for key in ["JWT_ADMIN_SECRET","JWT_ADMIN_REFRESH_SECRET","JWT_CUSTOMER_SECRET","JWT_CUSTOMER_REFRESH_SECRET"]:
+    if not new.get(key): new[key]=secrets.token_hex(32)
 with open(sys.argv[1],"x") as f: f.write("".join(key+"="+value+"\n" for key,value in new.items()))
 os.chmod(sys.argv[1],0o600)
 ' "$release/candidate.env" "$db"
