@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { adaptStoreContent, normalizedMainMenu, choosePackingPlaceholder, PACKING_PLACEHOLDER, BRANDING } from '../../deployment/adapt-store-content.mjs';
+import { adaptStoreContent, normalizedMainMenu, choosePackingPlaceholder, PACKING_PLACEHOLDER, BRANDING, LEGACY_CUSTOMER_FOOTER_NAME, LEGACY_CUSTOMER_FOOTER_ARCHIVE } from '../../deployment/adapt-store-content.mjs';
 
 const menu = () => ({ widget_instance_id: 1, status: true, type: 'basic_menu', settings: {
   className: '', isMain: '1', menus: ['/dresses','/pants','/tops'].map(url => ({ name: url.slice(1), type: 'custom', url, uuid: url, children: [] }))
@@ -73,4 +73,30 @@ test('protected-data drift rolls back branding, placement and parcel changes tog
   const f=fixture({corruptProtected:true});const initial=structuredClone(f.state);
   await assert.rejects(adaptStoreContent(f.client,{action:'apply',expectedDatabase:'preview'},{verifyLogo:false}),/Protected CMS/);
   assert.equal(f.calls.at(-1).sql,'ROLLBACK');assert.deepEqual(f.state,initial);
+});
+
+test('only the exact legacy customer information text block moves to an unrendered archive; content stays intact', async () => {
+  const f=fixture();
+  f.state.widgets[2].name=LEGACY_CUSTOMER_FOOTER_NAME;
+  f.state.placements[2].area='footerTop';
+  f.state.widgets.push({widget_instance_id:4,name:'other-footer-copy',status:true,type:'text_block',settings:{text:'Merchant authored content'}});
+  f.state.widgets.push({widget_instance_id:5,name:LEGACY_CUSTOMER_FOOTER_NAME,status:true,type:'basic_menu',settings:{menus:[]}});
+  f.state.placements.push({widget_placement_id:4,widget_instance_id:4,route:'all',area:'footerTop',entity_urn:null});
+  f.state.placements.push({widget_placement_id:5,widget_instance_id:5,route:'all',area:'footerTop',entity_urn:null});
+  const protectedWidgets=JSON.stringify(f.state.widgets.slice(1));
+  const first=await adaptStoreContent(f.client,{action:'apply',expectedDatabase:'preview'},{verifyLogo:false});
+  assert.equal(first.counts.archivedCustomerFooterPlacements,1);
+  assert.equal(f.state.placements[2].area,LEGACY_CUSTOMER_FOOTER_ARCHIVE);
+  assert.equal(f.state.placements[2].route,'all');assert.equal(f.state.placements[2].entity_urn,null);
+  assert.equal(f.state.placements[3].area,'footerTop');assert.equal(f.state.placements[4].area,'footerTop');
+  assert.equal(JSON.stringify(f.state.widgets.slice(1)),protectedWidgets);
+  const second=await adaptStoreContent(f.client,{action:'verify',expectedDatabase:'preview'},{verifyLogo:false});
+  assert.ok(Object.values(second.counts).every(count=>count===0));
+});
+
+test('the exact legacy customer footer in its original v1 area is archived directly', async () => {
+  const f=fixture();f.state.widgets[2].name=LEGACY_CUSTOMER_FOOTER_NAME;
+  const result=await adaptStoreContent(f.client,{action:'apply',expectedDatabase:'preview'},{verifyLogo:false});
+  assert.equal(result.counts.archivedCustomerFooterPlacements,1);
+  assert.equal(f.state.placements[2].area,LEGACY_CUSTOMER_FOOTER_ARCHIVE);
 });

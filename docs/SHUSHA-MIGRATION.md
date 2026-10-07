@@ -13,7 +13,9 @@ data, images, environment files and receiving instructions are mounted at runtim
    environment variables or bank configuration.
 2. Restore into a newly named candidate database. Copy media, material-library,
    slot journals and private configuration into isolated candidate directories.
-   Candidate `system.jobs` must remain empty. Do not point v1 at a v2 database.
+   Candidate `system.jobs` must remain empty, with `sitemap.enabled=false` and
+   `catalog.crossSell.recomputeEnabled=false` so native default jobs also stay
+   idle. Do not point v1 at a v2 database.
 3. Run `node deployment/capture-baseline.mjs --output /private/before.private.json`
    against the restored v1 copy before any migrations.
 4. Run `node deployment/migrate-v2.mjs`. The pinned runner checks native
@@ -23,9 +25,19 @@ data, images, environment files and receiving instructions are mounted at runtim
 5. Run `node deployment/adapt-store-content.mjs`. Review the reported packing
    placeholder; it is an explicitly unverified starter package, not a physical
    measurement. Set the returned ID as `MATERIAL_PUBLICATION_PACKAGE_ID`.
+   The exact legacy customer-information text block is retained in an unrendered
+   archive area to avoid duplicating the new brand footer. Other footer widgets
+   and all original CMS text stay intact. Homepage hero/category CSS is now a
+   compiled brand stylesheet because v2 sanitizes inline CMS `<style>` tags.
 6. Run `node deployment/verify-baseline.mjs --baseline /private/before.private.json`.
    No lost or new orders, changed historic money, stock, payment receipts,
    credentials or shipment state are accepted. New columns are allowed.
+   Exact native provider status aliases are accepted only with the original
+   provider and migration-version proof (for example Stripe failed remains
+   failed under its new provider-specific name). New CMS paths must derive
+   exactly from original page UUIDs and URL keys; existing paths and CMS
+   content remain protected. Older baselines lacking CMS hashes must be
+   recaptured read-only from the original backup copy.
 7. Check pages, category/product paths, redirects, mobile layout, icons offline,
    account-owned order payment links and an existing confirmed quote. Run only
    synthetic payment transitions in the dedicated test database; never register
@@ -45,6 +57,14 @@ then start the new pinned image on the existing public port. Preserve the old
 container/image and original database. Exactly one app and job process may
 write store data. Enable daily 09:00 price synchronization and Tuesday/Friday
 10:00 two-style publication in Asia/Shanghai only after switching.
+
+The retail-pricing bootstrap registers the two approved `system.jobs` entries
+through the native public cron registry. Their ESM entry points are
+`scripts/jobs/source-sync.js` and `scripts/jobs/material-drop.js`, with schedules
+`0 9 * * *` and `0 10 * * 2,5`. Set the container environment `TZ=Asia/Shanghai`;
+the native scheduler does not use `shop.timezone`. After compiling, run
+`node scripts/tests/native-job-registration.mjs` to verify the actual native
+registry keeps candidate workers disabled and registers both runtime workers.
 
 Validate health, order counts, the existing test order, customer payment access,
 catalog prices and next scheduled job times. A link opening is not payment

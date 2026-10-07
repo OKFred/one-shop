@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createLegacyRedirectHandler, isSafeTarget, SELECT_LEGACY_PATH } from '../src/services/legacyRedirect.js';
+import { createLegacyRedirectHandler, isSafeTarget, SELECT_LEGACY_PATH, CMS_PAGE_ALIASES } from '../src/services/legacyRedirect.js';
 
 function harness({ rows = [], queryError, request = {} } = {}) {
   const calls = { query: [], next: [], redirects: [] };
@@ -118,6 +118,37 @@ test('HEAD can redirect without calling next', async () => {
   await h.run();
   assert.equal(h.calls.redirects[0].status, 301);
   assert.deepEqual(h.calls.next, []);
+});
+
+test('only the three established CMS aliases bypass the ledger and preserve raw query strings', async () => {
+  const suffix = '?utm_source=A%2FB&empty=&x=one&x=two&literal=%2520';
+  assert.equal(Object.keys(CMS_PAGE_ALIASES).length, 3);
+  for (const [oldPath, targetPath] of Object.entries(CMS_PAGE_ALIASES)) {
+    for (const method of ['GET', 'HEAD']) {
+      for (const path of [oldPath, oldPath + '/']) {
+        const h = harness({ queryError: new Error('CMS aliases must not access the database'), request: { method, path, originalUrl: path + suffix, currentRoute: { id: 'cmsPageView' } } });
+        await h.run();
+        assert.deepEqual(h.calls.query, []);
+        assert.deepEqual(h.calls.next, []);
+        assert.deepEqual(h.calls.redirects, [{ status: 301, location: targetPath + suffix }]);
+      }
+    }
+  }
+});
+
+test('other CMS paths and unsupported methods retain the existing pipeline', async () => {
+  for (const path of ['/page/another-page', '/page/How-to-order', '/page/how-to-order//', '/how-to-order']) {
+    const h = harness({ request: { path, originalUrl: path, currentRoute: { id: 'cmsPageView' } } });
+    await h.run();
+    assert.deepEqual(h.calls.redirects, []);
+    assert.deepEqual(h.calls.next, [[]]);
+    assert.equal(h.calls.query.length, 1);
+  }
+  const post = harness({ request: { method: 'POST', path: '/page/contact' } });
+  await post.run();
+  assert.deepEqual(post.calls.query, []);
+  assert.deepEqual(post.calls.redirects, []);
+  assert.deepEqual(post.calls.next, [[]]);
 });
 
 test('POST and admin, API and static requests never query the ledger', async () => {

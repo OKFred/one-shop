@@ -5,8 +5,12 @@ import { select, sql, update } from '@evershop/postgres-query-builder';
 import { hookBefore } from '@evershop/evershop/lib/util/hookable';
 import { registerPricing } from './services/registerPricing.js';
 import { getRules } from './services/runtime.js';
+import { getConfig } from '@evershop/evershop/lib/util/getConfig';
+import { registerJob } from '@evershop/evershop/lib/cronjob';
+import { registerShushaJobs } from './services/registerJobs.js';
 
 export default async () => {
+  registerShushaJobs({ getConfig, registerJob });
   const rules = getRules();
   if (rules.enabled && getStoreCurrency() !== 'USD') {
     throw new Error('Retail pricing source values are USD; shop.currency must be USD');

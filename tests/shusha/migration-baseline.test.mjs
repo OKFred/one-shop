@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { canonical, hash, snapshotRows, validateSnapshot, captureDatabase } from '../../deployment/capture-baseline.mjs';
 import { compareSnapshots } from '../../deployment/verify-baseline.mjs';
 
-function table(rows, fields, keys = ['id'], types = {}) {
-  return { table: 'synthetic', exists: true, missingColumns: [], ...snapshotRows(rows, { keys, fields, columnTypes: types }) };
+function table(rows, fields, keys = ['id'], types = {}, values = []) {
+  return { table: 'synthetic', exists: true, missingColumns: [], ...snapshotRows(rows, { keys, fields, columnTypes: types, values }) };
 }
 
 function seal(snapshot) {
@@ -23,8 +23,12 @@ function baseline() {
       customers: table([{ id: 3, email: 'test-only@example.invalid', password: 'synthetic-password-hash' }], ['id', 'email', 'password']),
       inventory: table([{ id: 4, qty: 998 }], ['id', 'qty'], ['id'], { id: 'integer', qty: 'integer' }),
       quotes: table([{ id: 5, amount: '10.00', bank_details: { alpha: 'synthetic-only', beta: 'fixture' } }], ['id', 'amount', 'bank_details']),
+      cmsPages: table([], ['cms_page_id', 'uuid'], ['cms_page_id', 'uuid']),
+      cmsDescriptions: table([], ['cms_page_description_id', 'cms_page_description_cms_page_id', 'url_key', 'content'], ['cms_page_description_id', 'cms_page_description_cms_page_id']),
+      urlRewrites: table([], ['url_rewrite_id', 'request_path', 'target_path', 'entity_uuid', 'entity_type'], ['url_rewrite_id']),
       receipts: { table: 'synthetic-receipt', exists: false, columns: [], count: 0, records: [] }
     },
+    nativeMigrations: [{ module: 'cms', version: '1.1.1' }],
     nativeShipments: {
       orders: [{ order_id: 1, uuid: 'synthetic-order-uuid', shipment_status: 'pending', shipping_method: 'manual_quote', payment_method: 'banktransfer' }],
       shipments: [{ shipment_id: 7, shipment_order_id: 1, carrier: null, tracking_number: null, created_at: new Date('2026-01-01T00:00:00.000Z') }]
@@ -35,6 +39,7 @@ function baseline() {
 function migrated(before = baseline()) {
   const after = JSON.parse(JSON.stringify(before));
   after.sourceVersion = '2.2.1';
+  after.nativeMigrations = [{ module: 'cms', version: '1.4.0' }, { module: 'stripe', version: '1.0.0' }, { module: 'paypal', version: '1.0.0' }];
   after.nativeShipments.orders[0].shipping_method_data = { provider_code: 'shusha', method_code: 'manual_quote' };
   delete after.nativeShipments.orders[0].shipping_method;
   after.nativeShipments.shipments[0].package_id = null;
@@ -142,6 +147,8 @@ test('database capture is repeatable-read/read-only and preserves hashed credent
     category: { category_id: 'integer', uuid: 'uuid' },
     product_description: { product_description_product_id: 'integer', url_key: 'text' },
     category_description: { category_description_category_id: 'integer', url_key: 'text' },
+    cms_page: { cms_page_id: 'integer', uuid: 'uuid' },
+    cms_page_description: { cms_page_description_id: 'integer', cms_page_description_cms_page_id: 'integer', url_key: 'text', content: 'text' },
     url_rewrite: { url_rewrite_id: 'integer', request_path: 'text', target_path: 'text' },
     payment_transaction: { payment_transaction_id: 'integer', uuid: 'uuid' },
     shipment: { shipment_id: 'integer', shipment_order_id: 'integer', created_at: 'timestamp with time zone' }
@@ -182,4 +189,97 @@ test('database capture failure rolls back the read-only snapshot', async () => {
   } };
   await assert.rejects(captureDatabase(client), /catalog failure/);
   assert.equal(calls.at(-1), 'ROLLBACK');
+});
+
+function paymentFixture(method = 'stripe', oldStatus = 'failed', newStatus = 'stripe_failed') {
+  const original = baseline();
+  const fields = ['id', 'payment_method', 'payment_status', 'currency', 'grand_total', 'shipment_status'];
+  const types = { id: 'integer', grand_total: 'numeric' };
+  const row = { id: 1, payment_method: method, payment_status: oldStatus, currency: 'USD', grand_total: '8.9900', shipment_status: 'pending' };
+  original.tables.orders = table([row], fields, ['id'], types, fields);
+  const before = seal(original);
+  const after = migrated(before);
+  after.tables.orders = table([{ ...row, payment_status: newStatus }], fields, ['id'], types, fields);
+  return { before, after: seal(after), row, fields, types };
+}
+
+test('verified native Stripe/PayPal status aliases preserve meaning without allowing T/T or wrong-provider changes', () => {
+  for (const [method, from, to] of [['stripe', 'failed', 'stripe_failed'], ['stripe', 'paid', 'stripe_captured'], ['paypal', 'authorized', 'paypal_authorized']]) {
+    const fixture = paymentFixture(method, from, to);
+    const result = compareSnapshots(fixture.before, fixture.after);
+    assert.equal(result.status, 'verified');
+    assert.equal(result.nativeMappings.paymentStatusCanonicalizations, 1);
+  }
+  for (const [method, from, to] of [['stripe', 'failed', 'paypal_failed'], ['banktransfer', 'failed', 'stripe_failed'], ['banktransfer', 'pending', 'paid'], ['stripe', 'pending', 'stripe_captured']]) {
+    const fixture = paymentFixture(method, from, to);
+    const result = compareSnapshots(fixture.before, fixture.after);
+    assert.equal(result.status, 'mismatch');
+    assert.equal(result.mismatches.some(row => row.field === 'orders.payment_status'), true);
+  }
+});
+
+test('native payment alias requires proven migration and cannot conceal changed money or provider', () => {
+  const { before, after, row, fields, types } = paymentFixture();
+  after.nativeMigrations = after.nativeMigrations.filter(row => row.module !== 'stripe');
+  assert.equal(compareSnapshots(before, seal(after)).status, 'mismatch');
+  const changedAmount = paymentFixture();
+  changedAmount.after.tables.orders = table([{ ...row, grand_total: '9.99', payment_status: 'stripe_failed' }], fields, ['id'], types, fields);
+  assert.equal(compareSnapshots(changedAmount.before, seal(changedAmount.after)).mismatches.some(row => row.field === 'orders.grand_total'), true);
+  const changedMethod = paymentFixture();
+  changedMethod.after.tables.orders = table([{ ...row, payment_method: 'paypal', payment_status: 'stripe_failed' }], fields, ['id'], types, fields);
+  const result = compareSnapshots(changedMethod.before, seal(changedMethod.after));
+  assert.equal(result.mismatches.some(row => row.field === 'orders.payment_method'), true);
+  assert.equal(result.mismatches.some(row => row.field === 'orders.payment_status'), true);
+});
+
+function cmsFixture() {
+  const original = baseline();
+  const pageFields = ['cms_page_id', 'uuid', 'status'];
+  const descriptionFields = ['cms_page_description_id', 'cms_page_description_cms_page_id', 'url_key', 'content'];
+  const rewriteFields = ['url_rewrite_id', 'request_path', 'target_path', 'entity_uuid', 'entity_type'];
+  original.tables.cmsPages = table([{ cms_page_id: 20, uuid: 'synthetic-cms-uuid', status: true }], pageFields, ['cms_page_id', 'uuid'], { cms_page_id: 'integer' }, pageFields);
+  const description = { cms_page_description_id: 21, cms_page_description_cms_page_id: 20, url_key: 'synthetic-policy', content: '<p>Synthetic private merchant content</p>' };
+  original.tables.cmsDescriptions = table([description], descriptionFields, ['cms_page_description_id', 'cms_page_description_cms_page_id'], { cms_page_description_id: 'integer', cms_page_description_cms_page_id: 'integer' }, descriptionFields.filter(field => field !== 'content'));
+  const before = seal(original);
+  const after = migrated(before);
+  const rewrite = { url_rewrite_id: 30, entity_uuid: 'synthetic-cms-uuid', entity_type: 'cms_page', request_path: '/synthetic-policy', target_path: '/page/synthetic-policy' };
+  after.tables.urlRewrites = table([rewrite], rewriteFields, ['url_rewrite_id'], { url_rewrite_id: 'integer' }, rewriteFields);
+  return { before, after: seal(after), rewrite, rewriteFields, description, descriptionFields };
+}
+
+test('CMS native additions require the original page UUID, slug and protected content hash', () => {
+  const fixture = cmsFixture();
+  const result = compareSnapshots(fixture.before, fixture.after);
+  assert.equal(result.status, 'verified');
+  assert.equal(result.nativeMappings.cmsPageRewritesAdded, 1);
+  assert.equal(JSON.stringify(fixture.before.tables.cmsDescriptions).includes('Synthetic private merchant content'), false);
+  const old = baseline();
+  delete old.tables.cmsPages;
+  delete old.tables.cmsDescriptions;
+  assert.equal(compareSnapshots(seal(old), migrated()).mismatches.some(row => row.field === 'cmsRoutes.baseline_identity_or_path_missing'), true);
+  const withoutContent = cmsFixture();
+  withoutContent.before.tables.cmsDescriptions.columns = withoutContent.before.tables.cmsDescriptions.columns.filter(field => field !== 'content');
+  assert.equal(compareSnapshots(seal(withoutContent.before), withoutContent.after).status, 'mismatch');
+});
+
+test('arbitrary CMS URLs, wrong UUID/type/target and unproven migration remain failures', () => {
+  for (const change of [{ request_path: '/unrelated-route' }, { entity_uuid: 'unrelated-uuid' }, { entity_type: 'product' }, { target_path: '/unrelated-target' }]) {
+    const fixture = cmsFixture();
+    fixture.after.tables.urlRewrites = table([{ ...fixture.rewrite, ...change }], fixture.rewriteFields, ['url_rewrite_id'], { url_rewrite_id: 'integer' }, fixture.rewriteFields);
+    assert.equal(compareSnapshots(fixture.before, seal(fixture.after)).status, 'mismatch');
+  }
+  const noProof = cmsFixture();
+  noProof.after.nativeMigrations = noProof.after.nativeMigrations.filter(row => row.module !== 'cms');
+  assert.equal(compareSnapshots(noProof.before, seal(noProof.after)).status, 'mismatch');
+});
+
+test('CMS additions cannot conceal a public path collision or changed original content', () => {
+  const changedContent = cmsFixture();
+  changedContent.after.tables.cmsDescriptions = table([{ ...changedContent.description, content: '<p>Changed merchant content</p>' }], changedContent.descriptionFields, ['cms_page_description_id', 'cms_page_description_cms_page_id'], { cms_page_description_id: 'integer', cms_page_description_cms_page_id: 'integer' }, changedContent.descriptionFields.filter(field => field !== 'content'));
+  assert.equal(compareSnapshots(changedContent.before, seal(changedContent.after)).mismatches.some(row => row.field === 'cmsDescriptions.content'), true);
+  const collision = cmsFixture();
+  const oldRoute = { url_rewrite_id: 7, entity_uuid: 'synthetic-product-uuid', entity_type: 'product', request_path: '/synthetic-policy', target_path: '/product/synthetic-product' };
+  collision.before.tables.urlRewrites = table([oldRoute], collision.rewriteFields, ['url_rewrite_id'], { url_rewrite_id: 'integer' }, collision.rewriteFields);
+  collision.after.tables.urlRewrites = table([oldRoute, collision.rewrite], collision.rewriteFields, ['url_rewrite_id'], { url_rewrite_id: 'integer' }, collision.rewriteFields);
+  assert.equal(compareSnapshots(seal(collision.before), seal(collision.after)).status, 'mismatch');
 });
