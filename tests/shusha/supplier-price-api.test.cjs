@@ -77,6 +77,19 @@ test('API is backend GET, takes credential only from environment and never retur
   await assert.rejects(api.fetchSupplierPrices({ env: { ...env, SUUSHA_PRICE_API_URL: 'https://other.example/Excel/api.php' } }), /approved HTTPS endpoint/);
 });
 
+test('variant mapping preserves legacy paths and accepts only controlled native v2 punctuation normalization', () => {
+  const sourceVariantSku = 'L9998_blue.M';
+  const variant = { ...mapping.mappings[0], sourceVariantSku, storeSku: `SHUSHA-L9998-V-${sourceVariantSku}` };
+  for (const storeUrlKey of ['l9998-v-l9998_blue.m', 'l9998-v-l9998-blue-m']) {
+    const plan = api.planMappedPrices({ ...mapping, mappings: [{ ...variant, storeUrlKey }] }, makeFeed([row({ sku: sourceVariantSku })]), rate);
+    assert.equal(plan[0].sourcePriceUsd, 2.53);
+    assert.equal(plan[0].sourceVariantSku, sourceVariantSku);
+  }
+  for (const storeUrlKey of ['l9998-v-l9998-blue', 'l9998-v-l9998-blue.m', 'l9998-v-another']) {
+    assert.throws(() => api.validateMappings({ ...mapping, mappings: [{ ...variant, storeUrlKey }] }), /public URL/);
+  }
+});
+
 test('redirects and URL-containing fetch errors are sanitized without leaking credentials', async () => {
   const env = { SUUSHA_PRICE_API_KEY: 'example-only-test-token' };
   await assert.rejects(api.fetchSupplierPrices({ env, fetchImpl: async () => new Response('', { status: 302, headers: { location: 'https://other.example/' } }) }), /HTTP 302/);

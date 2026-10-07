@@ -7,6 +7,8 @@ import { createDatabasePool, hash, canonical } from './capture-baseline.mjs';
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 export const PACKING_PLACEHOLDER = 'Packing pending — manually confirm dimensions';
 export const BRANDING = Object.freeze({ storeName: 'SHUSHA', storeCurrency: 'USD', logo: '/assets/shusha/shusha-wordmark.svg', logoWidth: '200', logoHeight: '40' });
+export const LEGACY_CUSTOMER_FOOTER_NAME = 'shusha-customer-information';
+export const LEGACY_CUSTOMER_FOOTER_ARCHIVE = 'shushaLegacyFooterArchive';
 const CATEGORY_PATHS = ['/dresses', '/pants', '/tops'];
 
 export function parseOptions(args) {
@@ -109,13 +111,22 @@ export async function adaptStoreContent(client, options, { verifyLogo = true, me
     const settings = (await client.query('SELECT name,value,is_json FROM setting WHERE name=ANY($1::text[]) FOR UPDATE', [Object.keys(BRANDING)])).rows;
     const settingsToWrite = Object.entries(BRANDING).filter(([name, value]) => !settings.some(row => row.name === name && row.value === value && row.is_json === false));
     const menuChanges = menus.filter(({ widget, settings }) => canonical(widget.settings) !== canonical(settings));
-    const placementChanges = placements.filter(row => row.area === 'footer' || row.area === 'header' && menuIds.includes(row.widget_instance_id)).map(row => ({ row, area: row.area === 'header' ? 'headerMiddleLeft' : 'footerTop' }));
+    // The brand extension now renders the customer links and payment support.
+    // Preserve the exact legacy widget bytes in an unrendered archive area.
+    const legacyCustomerFooterIds = widgets.filter(widget => widget.name === LEGACY_CUSTOMER_FOOTER_NAME && widget.type === 'text_block').map(widget => widget.widget_instance_id);
+    const placementChanges = placements.flatMap(row => {
+      const archived = legacyCustomerFooterIds.includes(row.widget_instance_id) && ['footer', 'footerTop'].includes(row.area);
+      if (archived) return [{ row, area: LEGACY_CUSTOMER_FOOTER_ARCHIVE }];
+      if (row.area === 'header' && menuIds.includes(row.widget_instance_id)) return [{ row, area: 'headerMiddleLeft' }];
+      if (row.area === 'footer') return [{ row, area: 'footerTop' }];
+      return [];
+    });
     for (const { row, area } of placementChanges) assert(!placements.some(other => other.widget_placement_id !== row.widget_placement_id && other.widget_instance_id === row.widget_instance_id && other.route === row.route && other.area === area && (other.entity_urn || '') === (row.entity_urn || '')), 'Legacy placement would duplicate an existing v2 placement');
     const packages = (await client.query('SELECT * FROM package WHERE name=ANY($1::text[]) FOR UPDATE', [['Standard Box', PACKING_PLACEHOLDER]])).rows;
     const packing = choosePackingPlaceholder(packages);
     const packageId = packing.row.package_id;
     const unassigned = Number((await client.query("SELECT count(*) AS count FROM product WHERE LEFT(sku,7)='SHUSHA-' AND package_id IS NULL AND no_shipping_required IS NOT TRUE")).rows[0].count);
-    const planned = { settings: settingsToWrite.length, menus: menuChanges.length, placements: placementChanges.length, parcelRenames: packing.rename ? 1 : 0, parcelBindings: unassigned };
+    const planned = { settings: settingsToWrite.length, menus: menuChanges.length, placements: placementChanges.length, archivedCustomerFooterPlacements: placementChanges.filter(item => item.area === LEGACY_CUSTOMER_FOOTER_ARCHIVE).length, parcelRenames: packing.rename ? 1 : 0, parcelBindings: unassigned };
     if (options.action === 'verify') assert(Object.values(planned).every(count => count === 0), 'Store content adaptation is incomplete');
     if (options.action === 'apply') {
       for (const [name, value] of settingsToWrite) await client.query('INSERT INTO setting(name,value,is_json) VALUES($1,$2,FALSE) ON CONFLICT(name) DO UPDATE SET value=EXCLUDED.value,is_json=FALSE', [name, value]);

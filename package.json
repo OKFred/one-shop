@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "shusha:compile": "node scripts/compile-shusha.mjs",
-    "shusha:test": "node --test tests/shusha/*.test.* scripts/tests/*.test.* scripts/jobs/run.test.cjs",
+    "shusha:test": "node --test tests/shusha/*.test.mjs tests/shusha/*.test.cjs scripts/tests/*.test.mjs scripts/tests/*.test.cjs scripts/jobs/run.test.cjs",
     "shusha:prices": "node scripts/shusha-sync-prices.mjs",
     "dev": "node ./packages/evershop/dist/bin/dev/index.js",
     "start": "node ./packages/evershop/dist/bin/start/index.js",

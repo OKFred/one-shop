@@ -10,7 +10,8 @@ export function allowedPreviewRequest(method, url) {
   if (url.pathname === '/images') {
     const source = url.searchParams.get('src') || '';
     return /^\/assets\/[a-zA-Z0-9_./-]+$/.test(source) && !source.includes('..') &&
-      [...url.searchParams.keys()].every(key => ['src', 'w', 'h', 'q', 'width', 'height', 'quality'].includes(key));
+      [...url.searchParams.keys()].every(key => ['src', 'w', 'h', 'q', 'f', 'width', 'height', 'quality'].includes(key)) &&
+      (!url.searchParams.has('f') || ['webp', 'avif', 'png', 'jpeg'].includes(url.searchParams.get('f')));
   }
   return false;
 }

@@ -21,10 +21,15 @@ Candidate/test/staging databases require an explicit private map path.
 
 The native v2 job registry accepts `.js` modules: use the ESM wrappers
 `scripts/jobs/source-sync.js` and `scripts/jobs/material-drop.js`. Worker logic
-and the private journal runner remain CommonJS. Configure the shop timezone to
-`Asia/Shanghai`; source sync runs at `0 9 * * *`, and material publication at
+and the private journal runner remain CommonJS. The retail-pricing extension
+registers only the two approved `system.jobs` entries with EverShop's public
+job registry; arbitrary names, wrapper paths or schedules fail closed. Set the
+scheduler environment `TZ=Asia/Shanghai`; `shop.timezone` alone does not control
+the native cron scheduler. Source sync runs at `0 9 * * *`, and material publication at
 `0 10 * * 2,5`. Preview jobs remain disabled. Publication always requests two
-styles for the Shanghai calendar date.
+styles for the Shanghai calendar date. Candidate and maintenance config keeps
+`system.jobs=[]`, `sitemap.enabled=false` and
+`catalog.crossSell.recomputeEnabled=false` so native default jobs also stay idle.
 
 ## Material capture and review
 
@@ -90,14 +95,26 @@ After native schema migration, run
 `node deployment/adapt-store-content.mjs --dry-run --expected-database EXACT_TARGET`,
 then `--apply` and `--verify` against the same isolated database. This adaptation
 keeps existing CMS page and hero copy, moves the preserved main menu from the old
-`header` area to `headerMiddleLeft`, and moves old `footer` placements to
-`footerTop`. It preserves route, entity scope and sort order. Legacy menu list
+`header` area to `headerMiddleLeft`, and moves ordinary old `footer` placements to
+`footerTop`. The exact `shusha-customer-information` text-block widget moves
+from `footer` or `footerTop` to the unrendered `shushaLegacyFooterArchive` area:
+the brand extension now renders those support and payment links, and rendering
+both would duplicate the customer footer. Its stored content, route, entity
+scope and sort order stay intact; unrelated `footerTop` placements stay put.
+Legacy menu list
 fields and its main-menu boolean are normalized to v2 without recreating links.
 
 Store branding is now the native `setting` rows `storeName`, `storeCurrency`,
 `logo`, `logoWidth` and `logoHeight`; the former logo configuration alone cannot
 populate the new header. The original private-media wordmark remains
 `/assets/shusha/shusha-wordmark.svg`, intrinsically 200 × 40.
+
+EverShop v2 sanitizes inline `<style>` inside CMS text blocks. The reviewed
+legacy hero/category CSS is therefore compiled from the brand extension's
+`pages/frontStore/all/shusha.scss`, imported by its native head component.
+The public stylesheet contains styling only, without material URLs, private
+HTML or business data. Existing homepage CMS content remains byte-for-byte
+unchanged rather than weakening sanitization to restore presentation.
 
 The adaptation renames only the untouched native starter `Standard Box` to
 `Packing pending — manually confirm dimensions` and binds it to managed SHUSHA

@@ -1,6 +1,14 @@
 const SELECT_LEGACY_PATH =
   'SELECT target_path FROM public.shusha_legacy_path WHERE request_path = $1';
 
+// Existing CMS copy contains these URLs. The native CMS redirect drops the
+// query string, so handle only these established aliases before its renderer.
+const CMS_PAGE_ALIASES = Object.freeze({
+  '/page/how-to-order': '/how-to-order',
+  '/page/shipping-payment': '/shipping-payment',
+  '/page/contact': '/contact'
+});
+
 const RESERVED_PREFIX = /^\/(?:admin|api|graphql|assets|media|public|eHot)(?:\/|$)/i;
 const STATIC_EXTENSION = /\.(?:css|js|mjs|map|json|png|jpe?g|webp|gif|svg|ico|avif|woff2?|ttf|eot|mp4|webm)(?:$)/i;
 
@@ -54,6 +62,11 @@ function createLegacyRedirectHandler({ query }) {
       return;
     }
 
+    if (Object.hasOwn(CMS_PAGE_ALIASES, lookupPath)) {
+      response.redirect(301, CMS_PAGE_ALIASES[lookupPath] + rawQuery(request));
+      return;
+    }
+
     let result;
     try {
       // The ledger retains only the exact canonical old paths.
@@ -76,4 +89,4 @@ function createLegacyRedirectHandler({ query }) {
   };
 }
 
-export { createLegacyRedirectHandler, isSafeTarget, SELECT_LEGACY_PATH };
+export { createLegacyRedirectHandler, isSafeTarget, SELECT_LEGACY_PATH, CMS_PAGE_ALIASES };

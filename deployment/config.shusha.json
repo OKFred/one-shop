@@ -1,6 +1,8 @@
 {
   "shop": { "currency": "USD" },
   "retailPricing": { "enabled": true, "multiplier": "1.1" },
+  "sitemap": { "enabled": false },
+  "catalog": { "crossSell": { "recomputeEnabled": false } },
   "themeConfig": { "copyRight": "© 2026 SHUSHA" },
   "system": {
     "file_storage": "local",

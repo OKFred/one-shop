@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 
 // Read-only candidate acceptance. Never auto-loads .env or submits a mutation.
 const CATEGORIES = ['/dresses', '/pants', '/tops'];
+const CMS_PAGES = ['/how-to-order', '/shipping-payment', '/contact'];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 class AcceptanceError extends Error {}
 const check = (ok, code) => { if (!ok) throw new AcceptanceError(code); };
@@ -72,6 +73,14 @@ export function hasOfflineIcons(html) {
   return ['M6.488 7.469', 'M17.472 14.382'].every(signature => svgs.some(svg => svg.includes(signature) && /aria-hidden="true"/.test(svg) && /focusable="false"/.test(svg) && /<path\b/.test(svg)));
 }
 
+export function hasCmsContent(html) {
+  const visible = htmlBody(html);
+  if (!['cms-page', 'cms__page__heading', 'editor__html', 'row__container', 'column__container'].every(className => new RegExp(`class="[^"]*\\b${className}\\b`).test(visible))) return false;
+  const context = pageContext(html);
+  const pages = findObjects(context.graphqlResponse, value => typeof value.name === 'string' && value.name.trim() && Array.isArray(value.content));
+  return pages.length === 1 && pages[0].content.length > 0 && pages[0].content.some(row => Array.isArray(row.columns) && row.columns.some(column => Array.isArray(column.data?.blocks) && column.data.blocks.some(block => typeof block?.type === 'string' && block.data && typeof block.data === 'object')));
+}
+
 async function readCatalog(options, env) {
   check(/(?:^|[_-])(?:test|candidate|integration)(?:[_-]|$)/i.test(env.DB_NAME || ''), 'read-only-catalog-requires-isolated-database');
   const { createDatabasePool } = await import('./capture-baseline.mjs');
@@ -97,7 +106,7 @@ async function readCatalog(options, env) {
 
 export async function verifyHttp(options, { fetchImpl = fetch, env = process.env } = {}) {
   let checks = 0;
-  const counts = { categories: 0, products: 0, productIdentities: 0, legacyRedirects: 0, assets: 0 };
+  const counts = { categories: 0, cmsPages: 0, cmsRedirects: 0, products: 0, productIdentities: 0, legacyRedirects: 0, assets: 0 };
   const assertion = (ok, code) => { check(ok, code); checks++; };
   const request = async (requestPath, init = {}) => {
     const url = new URL(requestPath, options.origin);
@@ -132,6 +141,16 @@ export async function verifyHttp(options, { fetchImpl = fetch, env = process.env
     const item = await page(category, 'category');
     assertion(/<h1\b/.test(htmlBody(item.html)), 'category-heading'); counts.categories++;
   }
+  const suffix = '?shusha_readonly_check=1&empty=&duplicate=one&duplicate=two&encoded=A%2FB';
+  for (const cmsPath of CMS_PAGES) {
+    const item = await page(cmsPath, 'cms-page');
+    assertion(/<h1\b/.test(htmlBody(item.html)) && hasCmsContent(item.html), 'cms-page-original-content-structure'); counts.cmsPages++;
+    const response = await request('/page' + cmsPath + suffix);
+    assertion(response.status === 301, 'cms-legacy-redirect-status');
+    const location = new URL(response.headers.get('location') || '', options.origin);
+    assertion(location.origin === options.origin && location.pathname === cmsPath && location.search === suffix, 'cms-legacy-redirect-target-and-query');
+    await response.body?.cancel(); counts.cmsRedirects++;
+  }
   const db = options.database ? await readCatalog(options, env) : { products: [], legacy: [] };
   const products = [...new Map([...db.products, ...options.products].map(item => [item.path, item])).values()];
   const legacy = [...new Map([...db.legacy, ...options.legacy].map(item => [item.requestPath, item])).values()];
@@ -145,7 +164,6 @@ export async function verifyHttp(options, { fetchImpl = fetch, env = process.env
     }
     counts.products++;
   }
-  const suffix = '?shusha_readonly_check=1&empty=&duplicate=one&duplicate=two';
   for (const redirect of legacy) {
     const response = await request(redirect.requestPath + suffix);
     assertion(response.status === 301, 'legacy-redirect-status');
@@ -198,7 +216,7 @@ export async function verifyHttp(options, { fetchImpl = fetch, env = process.env
     assertion(denied.order === null && denied.bankTransferCustomerPaymentOrder === null, 'anonymous-order-and-pii-denied');
     payment = true;
   }
-  return { passed: true, checks, counts, coverage: { homepage: true, catalog: true, mappedProductIdentity: counts.productIdentities > 0, legacyRedirects: counts.legacyRedirects > 0, offlineSvgRendered: true, publicSchemaPrivacy: true, paymentLink: payment }, skipped: [...(!products.length ? ['mapped-products'] : []), ...(!legacy.length ? ['legacy-redirects'] : []), ...(!payment ? ['payment-link'] : [])], readOnly: true, providerCalls: 0, customerMessages: 0 };
+  return { passed: true, checks, counts, coverage: { homepage: true, catalog: true, cmsPages: counts.cmsPages === CMS_PAGES.length, cmsLegacyRedirects: counts.cmsRedirects === CMS_PAGES.length, mappedProductIdentity: counts.productIdentities > 0, legacyRedirects: counts.legacyRedirects > 0, offlineSvgRendered: true, publicSchemaPrivacy: true, paymentLink: payment }, skipped: [...(!products.length ? ['mapped-products'] : []), ...(!legacy.length ? ['legacy-redirects'] : []), ...(!payment ? ['payment-link'] : [])], readOnly: true, providerCalls: 0, customerMessages: 0 };
 }
 
 async function main() {

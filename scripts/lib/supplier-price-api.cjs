@@ -123,7 +123,11 @@ function validateMappings(map) {
     const anchor = `SHUSHA-${row.sourceId}`;
     const isAnchor = row.storeSku === anchor;
     assert(isAnchor || row.storeSku === `${anchor}-V-${row.sourceVariantSku}`, 'Managed mapping is outside the store namespace');
-    assert(row.storeUrlKey === (isAnchor ? row.sourceId.toLowerCase() : `${row.sourceId.toLowerCase()}-v-${row.sourceVariantSku.toLowerCase()}`), 'Managed source mapping SKU and public URL differ');
+    const legacyUrl = isAnchor ? row.sourceId.toLowerCase() : `${row.sourceId.toLowerCase()}-v-${row.sourceVariantSku.toLowerCase()}`;
+    // Preserve already published paths; native v2 new paths normalize only the
+    // supplier punctuation disallowed by its url_key validator.
+    const canonicalUrl = isAnchor ? legacyUrl : legacyUrl.replace(/[._]/g, '-');
+    assert(row.storeUrlKey === legacyUrl || row.storeUrlKey === canonicalUrl, 'Managed source mapping SKU and public URL differ');
   }
   return map.mappings;
 }
