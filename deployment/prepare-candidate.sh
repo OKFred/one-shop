@@ -19,6 +19,7 @@ test "$(docker inspect "$old" --format '{{.State.Running}}')" = true
 shared=$(docker inspect "$old" --format '{{range .Mounts}}{{if eq .Destination "/app/data/material-library"}}{{.Source}}{{end}}{{end}}')
 media=$(docker inspect "$old" --format '{{range .Mounts}}{{if eq .Destination "/app/media"}}{{.Source}}{{end}}{{end}}')
 wise=$(docker inspect "$old" --format '{{range .Mounts}}{{if eq .Destination "/wise-private"}}{{.Source}}{{end}}{{end}}')
+oldconfig=$(docker inspect "$old" --format '{{range .Mounts}}{{if eq .Destination "/app/config"}}{{.Source}}{{end}}{{end}}')
 test -d "$shared" && test -d "$media" && test -f "$wise/receiving.json"
 test -z "$(find "$shared/jobs" -maxdepth 1 -name '*.lock' -print)"
 test ! -e "$shared/.adapter.lock"
@@ -32,6 +33,19 @@ chmod 600 "$release/private-candidate/receiving.json"
 test -s "$release/media-candidate/shusha/shusha-wordmark.svg"
 cp "$release/source/deployment/config.shusha.json" "$release/config-candidate/default.json"
 cp "$release/source/deployment/config.shusha.json" "$release/config-candidate/production.json"
+python3 - "$oldconfig" "$release/config-candidate" <<'PY'
+import json,sys,os
+preserved={}
+for filename in ["default.json","production.json"]:
+    p=os.path.join(sys.argv[1],filename)
+    if os.path.isfile(p): preserved.update(json.load(open(p)).get("system",{}).get("session",{}))
+for filename in ["default.json","production.json"]:
+    p=os.path.join(sys.argv[2],filename); data=json.load(open(p))
+    if preserved: data["system"]["session"]=preserved
+    with open(p,"w") as f: json.dump(data,f,indent=2)
+    os.chmod(p,0o600)
+PY
+chmod 700 "$release/config-candidate"
 docker inspect "$old" --format '{{json .Config.Env}}' | python3 -c '
 import json,sys,os,secrets
 old=dict(x.split("=",1) for x in json.load(sys.stdin))
