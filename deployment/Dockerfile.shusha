@@ -1,0 +1,16 @@
+FROM node:22.23.3-bookworm-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392
+WORKDIR /app
+ENV HUSKY=0 CYPRESS_INSTALL_BINARY=0 NODE_OPTIONS=--max-old-space-size=4096
+COPY . .
+RUN mkdir -p config media public \
+ && cp deployment/config.shusha.json config/default.json \
+ && cp deployment/config.shusha.json config/production.json \
+ && npm ci --ignore-scripts --no-audit --no-fund \
+ && npm run compile \
+ && npm run compile:db \
+ && npm run shusha:compile \
+ && npm run build
+ENV NODE_ENV=production TZ=Asia/Shanghai
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s CMD node -e "fetch('http://127.0.0.1:3000/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+CMD ["npm", "run", "start"]

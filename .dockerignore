@@ -43,3 +43,16 @@ CODE_OF_CONDUCT.md
 # Local one-off scripts
 seed-*.mjs
 verify-*.mjs
+
+# Merchant state must never enter a build context.
+data
+media
+private
+private-data
+artifacts
+runtime.env
+candidate.env
+*.dump
+*.sql.gz
+**/*.dpapi
+extensions/*/dist

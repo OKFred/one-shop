@@ -1,0 +1,24 @@
+{
+  "shop": {
+    "currency": "USD"
+  },
+  "retailPricing": {
+    "enabled": true,
+    "multiplier": "1.1"
+  },
+  "themeConfig": {
+    "copyRight": "© 2026 SHUSHA"
+  },
+  "system": {
+    "file_storage": "local",
+    "extensions": [
+      {
+        "name": "storefront-brand",
+        "resolve": "extensions/storefront-brand",
+        "enabled": true,
+        "priority": 120
+      }
+    ],
+    "jobs": []
+  }
+}
