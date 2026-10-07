@@ -42,6 +42,10 @@ body { background: #faf8f4; color: #272b24; }
   a:focus-visible { outline: 2px solid #6b7b5e; outline-offset: 5px; }
   @media (max-width: 767px) {
     .header { padding-top: 17px; padding-bottom: 17px; }
+    /* Reserve the native menu, utility controls, gaps and gutters on phones. */
+    .header .header__middle { gap: 12px; }
+    .header .header__middle__center, .header .logo { min-width: 0; }
+    .header .logo .logo-icon img { width: clamp(90px, calc(100vw - 228px), 150px); height: auto; }
     .shusha-hero { margin-top: 16px; padding: 0 18px; }
     .shusha-hero-inner { grid-template-columns: 1fr; }
     .shusha-hero-copy { padding: 38px 30px; }
