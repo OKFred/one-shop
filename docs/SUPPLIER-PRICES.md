@@ -43,14 +43,22 @@ currency script in the private backup volume with SHA-256 provenance, capture
 timestamps, original LKR, USD divisor, a pre-write snapshot and journal. No API
 URL containing a credential is persisted.
 
-Schema or mapping conflicts stop the batch. Missing, ambiguous, invalid-price or
-unavailable managed variants retain their existing store prices and produce a
+Schema or mapping conflicts stop the batch. Missing, ambiguous or invalid-price
+managed variants retain their existing store prices and produce a
 `partial` result (exit 2); unrelated unusable rows produce aggregate diagnostics.
 The job takes the shared publication and source-price advisory locks, in that
 order, and updates only
 `product.price` in a single transaction, verifies the write, then commits.
-Supplier stock is availability evidence only: this job never writes inventory,
+Supplier stock is diagnostic evidence only for this price job. A valid source
+price still synchronizes when API stock is zero, missing or invalid. The original
+response remains in `supplier-prices.private.json`; snapshots and journals retain
+the normalized quantity (zero or `null` for unknown/invalid stock) and an explicit
+stock diagnostic. Aggregate zero/invalid-stock counts are reported. Stock diagnostics alone do not produce
+a partial pricing result. This job never writes inventory or product availability,
 replenishes the store's order-request capacity, or reprices historical orders.
+New material publication still requires genuinely available source variants,
+READY review and verified original images; these price-sync rules do not change
+its eligibility checks. Merchant confirmation remains necessary before payment.
 
 The scheduled production job remains 09:00 Asia/Shanghai. Run it only against the
 active deployment's private database and volumes. Preview uses independent

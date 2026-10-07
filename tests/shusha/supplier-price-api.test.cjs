@@ -32,21 +32,36 @@ test('invalid unrelated rows remain diagnostics and do not discard valid managed
   assert.equal(feed.diagnostics.zeroPriceRows, 1);
 });
 
-test('managed missing, ambiguous, invalid, unavailable and case-mismatched rows retain old prices', () => {
+test('managed missing, ambiguous, invalid and case-mismatched prices retain old prices regardless of stock', () => {
   const cases = [
     [[row({ sku: 'other' })], 'supplier-source-sku-missing'],
     [[row(), row()], 'supplier-source-sku-ambiguous'],
     [[row({ unit_sales_price_02: null })], 'supplier-source-price-missing-or-invalid'],
     [[row({ unit_sales_price_02: '0' })], 'supplier-source-price-missing-or-invalid'],
     [[row({ unit_sales_price_02: '1e3' })], 'supplier-source-price-missing-or-invalid'],
-    [[row({ stock_qty: null })], 'supplier-source-stock-invalid'],
-    [[row({ stock_qty: '0' })], 'supplier-source-variant-unavailable'],
+    [[row({ stock_qty: '0', unit_sales_price_02: null })], 'supplier-source-price-missing-or-invalid'],
+    [[row({ stock_qty: null, unit_sales_price_02: '0' })], 'supplier-source-price-missing-or-invalid'],
     [[row({ sku: 'l9998testm' })], 'supplier-source-sku-missing']
   ];
   for (const [rows, reason] of cases) {
     const item = api.planMappedPrices(mapping, makeFeed(rows), rate)[0];
     assert.equal(item.skipReason, reason);
     assert.equal(item.sourcePriceUsd, null);
+  }
+});
+
+test('zero, missing and invalid API stock remain diagnostics while valid source prices are planned', () => {
+  for (const stockQty of ['0', null, undefined, '-1', '1.5', 'unknown']) {
+    const item = row({ stock_qty: stockQty });
+    if (stockQty === undefined) delete item.stock_qty;
+    const feed = makeFeed([item]);
+    const plan = api.planMappedPrices(mapping, feed, rate)[0];
+    assert.equal(plan.skipReason, null);
+    assert.equal(plan.sourcePriceUsd, 2.53);
+    assert.equal(plan.sourceStockQty, stockQty === '0' ? 0 : null);
+    assert.equal(plan.sourceStockDiagnostic, stockQty === '0' ? 'supplier-source-variant-unavailable' : 'supplier-source-stock-invalid');
+    assert.equal(feed.diagnostics.zeroStockRows, stockQty === '0' ? 1 : 0);
+    assert.equal(feed.diagnostics.invalidStockRows, stockQty === '0' ? 0 : 1);
   }
 });
 
@@ -155,6 +170,24 @@ test('partial managed row retains its old price with an applied partial journal'
   assert.equal(result.transactionStatus, 'applied');
   assert.equal(result.skipped.length, 1);
   assert.equal(client.calls.some(call => call.sql.startsWith('UPDATE')), false);
+});
+
+test('zero or invalid supplier stock does not produce partial pricing or write store inventory/status', async () => {
+  const { transactPrices } = await import(modulePath);
+  for (const stockQty of ['0', null]) {
+    const plan = api.planMappedPrices(mapping, makeFeed([row({ stock_qty: stockQty })]), rate);
+    const client = fakeClient();
+    const result = await transactPrices(client, plan, { apply: true });
+    assert.equal(result.status, 'applied');
+    assert.equal(result.skipped.length, 0);
+    assert.equal(result.changes.length, 1);
+    assert.equal(result.before[0].sourceStockQty, stockQty === '0' ? 0 : null);
+    assert.equal(result.before[0].sourceStockDiagnostic, stockQty === '0' ? 'supplier-source-variant-unavailable' : 'supplier-source-stock-invalid');
+    const writes = client.calls.filter(call => /^(?:UPDATE|INSERT|DELETE)/.test(call.sql));
+    assert.equal(writes.length, 1);
+    assert.match(writes[0].sql, /^UPDATE product SET price=\$1 WHERE product_id=\$2 AND uuid=\$3 AND sku=\$4$/);
+    assert.equal(client.calls.some(call => /inventory|order_item|UPDATE "?order|SET.*(?:qty|stock_availability|status)/.test(call.sql)), false);
+  }
 });
 
 test('lock, ownership, snapshot failure and transaction readback failures never commit', async () => {
