@@ -1,0 +1,8 @@
+{
+  "name": "@shusha/storefront-brand",
+  "version": "2.2.1",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0-only",
+  "exports": { "./components/BrandIcon": "./dist/components/BrandIcon.js" }
+}

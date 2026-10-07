@@ -8,6 +8,9 @@
     "extensions/*"
   ],
   "scripts": {
+    "shusha:compile": "node scripts/compile-shusha.mjs",
+    "shusha:test": "node --test tests/shusha/*.test.* scripts/tests/*.test.* scripts/jobs/run.test.cjs",
+    "shusha:prices": "node scripts/shusha-sync-prices.mjs",
     "dev": "node ./packages/evershop/dist/bin/dev/index.js",
     "start": "node ./packages/evershop/dist/bin/start/index.js",
     "build": "node ./packages/evershop/dist/bin/build/index.js",
@@ -33,6 +36,7 @@
     "prepare": "husky install"
   },
   "author": "The Nguyen (https://evershop.io)",
+  "engines": { "node": "22.x" },
   "license": "GNU GENERAL PUBLIC LICENSE 3.0",
   "devDependencies": {
     "@parcel/watcher": "^2.5.1",
@@ -61,6 +65,7 @@
     "webpack-bundle-analyzer": "^4.10.2"
   },
   "dependencies": {
+    "@iconify/react": "6.0.2",
     "@sendgrid/mail": "^8.1.6",
     "@types/react-slick": "^0.23.13",
     "@types/uuid": "^10.0.0",
