@@ -13,6 +13,18 @@
     "file_storage": "local",
     "extensions": [
       {
+        "name": "retail-pricing",
+        "resolve": "extensions/retail-pricing",
+        "enabled": true,
+        "priority": 100
+      },
+      {
+        "name": "storefront-identity",
+        "resolve": "extensions/storefront-identity",
+        "enabled": true,
+        "priority": 110
+      },
+      {
         "name": "storefront-brand",
         "resolve": "extensions/storefront-brand",
         "enabled": true,
