@@ -166,7 +166,9 @@ quiet docker stop -t 60 "$old"
 [[ $(docker inspect "$old" --format '{{.State.Running}}') == false ]]
 [[ $(docker inspect "$old" --format '{{.Id}}') == $(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))[0]["Id"])' "$final/old-container.private.json") ]]
 check_jobs
-[[ $(docker exec "$pg" psql -U postgres -d postgres -Atc "SELECT count(*) FROM pg_stat_activity WHERE datname='$old_database' AND backend_type='client backend'") == 0 ]]
+# The observer also connects to postgres, which may itself be the old store.
+# Exclude only this backend; all other clients, including idle ones, still block.
+[[ $(docker exec "$pg" psql -U postgres -d postgres -Atc "SELECT count(*) FROM pg_stat_activity WHERE datname='$old_database' AND backend_type='client backend' AND pid <> pg_backend_pid()") == 0 ]]
 stage=final-backup
 docker exec "$pg" pg_dump -U postgres -Fc -d "$old_database" >"$final/database.dump"
 [[ -s "$final/database.dump" ]]

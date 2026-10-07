@@ -19,7 +19,7 @@ spec.loader.exec_module(helper)
 IMAGE = 'sha256:' + 'a' * 64
 
 DOCKER = r'''#!/usr/bin/env python3
-import json, os, sys
+import json, os, re, sys
 from pathlib import Path
 a = sys.argv[1:]
 root = Path(os.environ['MOCK_ROOT'])
@@ -65,7 +65,22 @@ if a[0] == 'exec':
     name,command,*arguments=b
     if command=='psql':
         if scenario=='preflight-query-failed': done(code=1)
-        done('0' if 'count(*)' in arguments[-1] else '')
+        query = arguments[-1]
+        if 'pg_stat_activity' in query:
+            target = re.search(r"\bdatname='([^']+)'", query)
+            if not target or "backend_type='client backend'" not in query: done(code=1)
+            observer_pid = 101
+            connections = [{'datname':arguments[arguments.index('-d')+1],
+                            'backend_type':'client backend','pid':observer_pid},
+                           *s['clientConnections']]
+            exclude_self = bool(re.search(r'\bpid\s*<>\s*pg_backend_pid\s*\(\s*\)', query))
+            count = sum(connection['datname']==target.group(1)
+                        and connection['backend_type']=='client backend'
+                        and (not exclude_self or connection['pid']!=observer_pid)
+                        for connection in connections)
+            s['connectionCounts'].append(count)
+            done(str(count))
+        done()
     if command=='pg_dump': done('synthetic-custom-dump')
     if command=='createdb': s['databaseCreated']=True; done()
     if command=='pg_restore': sys.stdin.read(); done()
@@ -123,13 +138,15 @@ class CutoverFlowTests(unittest.TestCase):
             filename.write_text('{"configured":false}')
         accepted={**helper.inputs(self.release,IMAGE),**{flag:True for flag in helper.FLAGS}}
         (self.release / 'private-candidate/acceptance.json').write_text(json.dumps(accepted))
-        oldenv={**env,'DB_NAME':'legacy_store'}
+        # Production's old store is postgres, also used by the observer psql.
+        oldenv={**env,'DB_NAME':'postgres'}
         old={'Id':'original-old-id','Image':'old-image','State':{'Running':True},'Config':{'Env':[f'{k}={v}' for k,v in oldenv.items()]},
              'HostConfig':{'PortBindings':{'3000/tcp':[{'HostPort':'5433','HostIp':'127.0.0.1'}]}},
              'NetworkSettings':{'Networks':{'MyEverShop':{}}},'Mounts':[{'Type':'bind','Destination':destination,'Source':str(self.root/source)}
                 for destination,source in (('/app/data/material-library','old/library'),('/app/media','old/media'),
                 ('/wise-private','old/wise'),('/app/config','old/config'))]}
-        state={'image':IMAGE,'databaseCreated':False,'calls':[],'containers':{'evershop':old,'pg':{'Id':'synthetic-pg-id','Image':'synthetic-pg-image','State':{'Running':True}}}}
+        state={'image':IMAGE,'databaseCreated':False,'calls':[],'clientConnections':[],'connectionCounts':[],
+               'containers':{'evershop':old,'pg':{'Id':'synthetic-pg-id','Image':'synthetic-pg-image','State':{'Running':True}}}}
         (self.root / 'docker-state.json').write_text(json.dumps(state))
         (self.bin / 'docker').write_text(DOCKER)
         # One immediate health attempt keeps a negative rehearsal bounded.
@@ -154,11 +171,45 @@ class CutoverFlowTests(unittest.TestCase):
         result,state,report=self.run_cutover('success')
         self.assertEqual(result.returncode,0)
         self.assertEqual(report['status'],'cutover-complete')
+        self.assertEqual(state['connectionCounts'],[0])
         self.assertTrue(state['containers']['evershop']['State']['Running'])
         self.assertFalse(state['containers']['evershop-v1-rollback']['State']['Running'])
         self.assertFalse(state['containers']['evershop-v2-maintenance']['State']['Running'])
         self.assertEqual(state['containers']['evershop-v1-rollback']['Id'],'original-old-id')
         self.assertFalse(any('dropdb' in call or 'rm' in call for call in state['calls']))
+
+    def assert_stopped_writer_resumed_before_backup(self, result, state, report):
+        self.assertNotEqual(result.returncode,0)
+        self.assertEqual(report['status'],'failed-old-resumed')
+        self.assertEqual(report['stage'],'stop-old-writers')
+        self.assertTrue(report['oldResumed'])
+        self.assertEqual(state['containers']['evershop']['Id'],'original-old-id')
+        self.assertTrue(state['containers']['evershop']['State']['Running'])
+        self.assertFalse(state['databaseCreated'])
+        self.assertFalse(any('pg_dump' in call or 'createdb' in call or 'pg_restore' in call for call in state['calls']))
+        self.assertFalse(any(any('migrate-v2.mjs' in argument for argument in call) for call in state['calls']))
+
+    def test_observer_blocks_itself_when_pid_exclusion_is_missing(self):
+        script=self.source/'deployment/cutover-v2.sh'
+        text=script.read_text()
+        exclusion=' AND pid <> pg_backend_pid()'
+        self.assertEqual(text.count(exclusion),1)
+        # Negative control changes only the isolated rehearsal copy.
+        script.write_text(text.replace(exclusion,''))
+        accepted={**helper.inputs(self.release,IMAGE),**{flag:True for flag in helper.FLAGS}}
+        (self.release/'private-candidate/acceptance.json').write_text(json.dumps(accepted))
+        result,state,report=self.run_cutover('success')
+        self.assertEqual(state['connectionCounts'],[1])
+        self.assert_stopped_writer_resumed_before_backup(result,state,report)
+
+    def test_other_idle_client_still_blocks_when_observer_is_excluded(self):
+        statefile=self.root/'docker-state.json'
+        state=json.loads(statefile.read_text())
+        state['clientConnections']=[{'datname':'postgres','backend_type':'client backend','pid':102,'state':'idle'}]
+        statefile.write_text(json.dumps(state))
+        result,state,report=self.run_cutover('success')
+        self.assertEqual(state['connectionCounts'],[1])
+        self.assert_stopped_writer_resumed_before_backup(result,state,report)
 
     def test_migration_failure_resumes_original_writer_and_preserves_failed_copy(self):
         result,state,report=self.run_cutover('migration-failed')
