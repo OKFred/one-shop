@@ -47,7 +47,7 @@ body { background: #faf8f4; color: #272b24; }
     .header .header__middle__center, .header .logo { min-width: 0; }
     .header .logo .logo-icon img { width: clamp(90px, calc(100vw - 228px), 150px); height: auto; }
     .shusha-hero { margin-top: 16px; padding: 0 18px; }
-    .shusha-hero-inner { grid-template-columns: 1fr; }
+    .shusha-hero-inner { grid-template-columns: minmax(0, 1fr); }
     .shusha-hero-copy { padding: 38px 30px; }
     .shusha-hero h1 { font-size: 49px !important; }
     .shusha-eyebrow { margin-bottom: 18px !important; }
