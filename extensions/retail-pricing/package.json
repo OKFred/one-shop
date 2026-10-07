@@ -1,0 +1,10 @@
+{
+  "name": "@shusha/retail-pricing",
+  "version": "2.0.0",
+  "type": "module",
+  "private": true,
+  "license": "GPL-3.0-only",
+  "peerDependencies": {
+    "@evershop/evershop": "2.2.1"
+  }
+}
