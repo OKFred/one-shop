@@ -34,6 +34,14 @@ test('only reviewed original material with actual available size/colour becomes 
   assert.equal(plan.variants[0].images[0].assetUrl,`/assets/source-library/${'a'.repeat(64)}.png`);
 });
 
+test('a valid Resale price never makes an unavailable variant eligible for new material publication', () => {
+  for (const change of [{ available: false }, { availableQty: 0 }, { availableQty: null }]) {
+    const { source, media } = fixture();
+    Object.assign(source.variants[0], change);
+    assert.throws(() => normalizedStyle(source, 'dresses', media, { maxAgeHours: 48 }, false), /No usable available variants/);
+  }
+});
+
 test('changed visual facts, missing original file evidence and stale source data fail closed', () => {
   const changed=fixture();changed.source.variants[0].color='Blue';
   assert.throws(()=>normalizedStyle(changed.source,'dresses',changed.media,{maxAgeHours:48},false),/visual review/);

@@ -60,15 +60,16 @@ function decimal(value, { integer = false } = {}) {
 function parsePriceRows(rows) {
   assert(Array.isArray(rows) && rows.length > 0 && rows.length <= 100000, 'Supplier price response must be a bounded nonempty array');
   const bySku = new Map();
-  const diagnostics = { invalidSkuRows: 0, invalidPriceRows: 0, zeroPriceRows: 0, invalidStockRows: 0, duplicateSkuRows: 0 };
+  const diagnostics = { invalidSkuRows: 0, invalidPriceRows: 0, zeroPriceRows: 0, invalidStockRows: 0, zeroStockRows: 0, duplicateSkuRows: 0 };
   for (const row of rows) {
-    assert(row && typeof row === 'object' && !Array.isArray(row) && ['sku', 'stock_qty', PRICE_FIELD].every(key => Object.hasOwn(row, key)), 'Supplier price response schema changed');
+    assert(row && typeof row === 'object' && !Array.isArray(row) && ['sku', PRICE_FIELD].every(key => Object.hasOwn(row, key)), 'Supplier price response schema changed');
     if (typeof row.sku !== 'string' || !/^[A-Za-z0-9._-]{1,80}$/.test(row.sku)) { diagnostics.invalidSkuRows++; continue; }
     const lkr = decimal(row[PRICE_FIELD]);
     const stockQty = decimal(row.stock_qty, { integer: true });
     if (lkr === null) diagnostics.invalidPriceRows++;
     if (lkr === 0) diagnostics.zeroPriceRows++;
     if (stockQty === null) diagnostics.invalidStockRows++;
+    else if (stockQty === 0) diagnostics.zeroStockRows++;
     const entry = { sourceSku: row.sku, lkr, stockQty, ambiguous: false };
     if (bySku.has(row.sku)) { diagnostics.duplicateSkuRows++; bySku.set(row.sku, { ...entry, ambiguous: true }); }
     else bySku.set(row.sku, entry);
@@ -142,11 +143,14 @@ function planMappedPrices(map, feed, rate) {
     if (!row) skipReason = 'supplier-source-sku-missing';
     else if (row.ambiguous) skipReason = 'supplier-source-sku-ambiguous';
     else if (row.lkr === null || row.lkr <= 0) skipReason = 'supplier-source-price-missing-or-invalid';
-    else if (row.stockQty === null) skipReason = 'supplier-source-stock-invalid';
-    else if (row.stockQty <= 0) skipReason = 'supplier-source-variant-unavailable';
+    // Request capacity and supplier availability are separate. Preserve API
+    // stock evidence without letting it suppress a valid source-price refresh.
+    const sourceStockDiagnostic = !row ? null : row.stockQty === null
+      ? 'supplier-source-stock-invalid' : row.stockQty === 0
+        ? 'supplier-source-variant-unavailable' : null;
     const price = skipReason ? null : sourceDisplayUsd(row.lkr, rate.usdDivisor);
     if (!skipReason && price <= 0) skipReason = 'supplier-source-usd-price-zero';
-    return { ...mapping, sourcePriceLkr: row?.lkr ?? null, sourcePriceUsd: skipReason ? null : price, sourceStockQty: row?.stockQty ?? null, sourceCapturedAt: feed.capturedAt, sourceUsdDivisor: rate.usdDivisor, sourceApiSha256: feed.sha256, sourceRateSha256: rate.scriptSha256, skipReason };
+    return { ...mapping, sourcePriceLkr: row?.lkr ?? null, sourcePriceUsd: skipReason ? null : price, sourceStockQty: row?.stockQty ?? null, sourceStockDiagnostic, sourceCapturedAt: feed.capturedAt, sourceUsdDivisor: rate.usdDivisor, sourceApiSha256: feed.sha256, sourceRateSha256: rate.scriptSha256, skipReason };
   });
 }
 
