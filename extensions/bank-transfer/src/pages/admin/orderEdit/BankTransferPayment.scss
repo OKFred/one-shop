@@ -1,0 +1,22 @@
+.shusha-admin-payment {
+  display: grid;
+  gap: 1rem;
+
+  section { display: grid; gap: 1rem; border-top: 1px solid #e1e3e5; padding-top: 1.25rem; }
+  h4 { font-weight: 600; }
+  .shusha-admin-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+  .shusha-admin-fields label { display: grid; gap: 0.4rem; font-weight: 500; }
+  .shusha-admin-fields input, .shusha-admin-fields select { border: 1px solid #aeb4b9; border-radius: 3px; width: 100%; padding: 0.65rem; box-sizing: border-box; }
+  .shusha-admin-field-wide { grid-column: 1 / -1; }
+  .shusha-admin-check { display: flex; align-items: flex-start; gap: 0.75rem; }
+  .shusha-admin-check input { margin-top: 0.3rem; }
+  .shusha-admin-note { display: block; color: #626970; font-size: 0.9em; margin-top: 0.4rem; }
+  .shusha-admin-message { padding: 1rem; background: #f6f7f8; border-left: 3px solid #7c8d9c; }
+  .shusha-admin-message.critical { border-left-color: #c43131; }
+  .button { justify-self: start; }
+  .button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  @media (max-width: 640px) {
+    .shusha-admin-fields { grid-template-columns: 1fr; }
+  }
+}
