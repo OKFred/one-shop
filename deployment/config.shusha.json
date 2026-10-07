@@ -4,6 +4,12 @@
   "themeConfig": { "copyRight": "© 2026 SHUSHA" },
   "system": {
     "file_storage": "local",
+    "notification_emails": {
+      "order_confirmation": { "enabled": false },
+      "customer_welcome": { "enabled": false },
+      "shipment_created": { "enabled": false },
+      "shipment_delivered": { "enabled": false }
+    },
     "extensions": [
       { "name": "bank-transfer", "resolve": "extensions/bank-transfer", "enabled": true, "priority": 30 },
       { "name": "retail-pricing", "resolve": "extensions/retail-pricing", "enabled": true, "priority": 100 },

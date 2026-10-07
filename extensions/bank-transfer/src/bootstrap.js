@@ -5,8 +5,10 @@ import { resolveOrderStatus } from '@evershop/evershop/oms/services';
 import { provinces } from '@evershop/evershop/lib/locale/provinces';
 import { isEnabled, displayName } from './services/settings.js';
 import { manualQuoteProvider, PROVIDER_CODE, CODE, validateQuoteAddress } from './services/manualQuote.js';
+import { installAutomaticEmailPolicy } from './services/automaticEmails.js';
 
 export default () => {
+  installAutomaticEmailPolicy();
   registerShippingProvider(manualQuoteProvider);
   registerPaymentMethod({
     init: async () => ({ code: 'banktransfer', name: await displayName() }),

@@ -38,6 +38,8 @@ const { default: resolvers } = await import('../dist/graphql/types/OrderPayment/
 const { default: migrate } = await import('../dist/migration/Version-1.0.0.js');
 const { default: migrateShipping } = await import('../dist/migration/Version-1.0.1.js');
 const { countries } = await import('@evershop/evershop/lib/locale/countries');
+const { registerEmailService } = await import('@evershop/evershop/lib/mail/emailHelper');
+const { loadSubscribers } = await importFile(path.join(native, 'lib/event/loadSubscribers.js'));
 const { graphql } = await import('graphql');
 const { rebuildStoreFrontSchema } = await importFile(path.join(native, 'modules/graphql/services/buildStoreFrontSchema.js'));
 const { rebuildSchema } = await importFile(path.join(native, 'modules/graphql/services/buildSchema.js'));
@@ -54,11 +56,21 @@ let previousSetting;
 let cartId;
 let customerId;
 let checks = 0;
+let emailAttempts = 0;
 try {
   assert.equal((await pool.query('SELECT current_database() AS name')).rows[0].name, expected);
   previousSetting = (await pool.query('SELECT * FROM setting WHERE name=$1', ['bankTransferPaymentStatus'])).rows[0] || null;
   await pool.query("INSERT INTO setting(name,value,is_json) VALUES('bankTransferPaymentStatus','1',FALSE) ON CONFLICT(name) DO UPDATE SET value='1',is_json=FALSE");
   await refreshSetting();
+  // Instrument only this synthetic test process. An unexpected attempt throws;
+  // it never returns a fake success and never invokes an external provider.
+  registerEmailService({ sendEmail: async () => { emailAttempts++; throw new Error('Unexpected synthetic email attempt'); } });
+  const nativeSubscribers = await loadSubscribers(getCoreModules());
+  const autoEmailSubscribers = nativeSubscribers.filter(({ subscriber }) => ['sendOrderConfirmationEmail', 'sendCustomerWelcomeEmail', 'sendShipmentCreatedEmail', 'sendShipmentDeliveredEmail'].includes(subscriber.name));
+  assert.equal(autoEmailSubscribers.length, 4); checks++;
+  assert(nativeSubscribers.some(({ event }) => event === 'product_created')); assert(nativeSubscribers.some(({ event }) => event === 'category_updated')); assert(nativeSubscribers.length > autoEmailSubscribers.length); checks += 3;
+  for (const { subscriber } of autoEmailSubscribers) await subscriber({ email: 'synthetic@example.invalid', notifyCustomer: true });
+  assert.equal(emailAttempts, 0); checks++;
   await migrate(pool); await migrate(pool);
   await migrateShipping(pool); await migrateShipping(pool);
   const zone = (await pool.query('SELECT z.shipping_zone_id,p.is_enabled FROM shipping_zone z JOIN shipping_zone_provider p ON p.zone_id=z.shipping_zone_id WHERE z.uuid=$1 AND p.provider_code=$2', ['ed8f7156-3636-4d8b-8e64-0e894795d7f6', 'shusha'])).rows[0];
@@ -140,7 +152,7 @@ try {
   assert.equal(nativeCheckout.errors, undefined); assert.equal(nativeCheckout.data.order.orderNumber, first.order_number); checks += 2;
   const adminOrder = await graphql({ schema: adminSchema, source: `{ order(uuid:"${first.uuid}") { orderNumber bankTransferQuote { status } } bankTransferReceivingConfig { ready currencies } }`, contextValue: { pool, user: { user_id: 1 } } });
   assert.equal(adminOrder.errors, undefined); assert.equal(adminOrder.data.order.orderNumber, first.order_number); assert.equal(adminOrder.data.bankTransferReceivingConfig.ready, true); checks += 3;
-  console.log(JSON.stringify({ passed: true, checks, providerCalls: 0, customerMessages: 0, preservedNativeUsdTotals: true, quoteRevisionProtected: true, duplicateReceiptRejected: true, atomicRollbackVerified: true, authenticatedOwnershipVerified: true, compiledGraphqlSchemaMerged: true }));
+  console.log(JSON.stringify({ passed: true, checks, providerCalls: 0, customerMessages: 0, automaticEmailAttempts: emailAttempts, nativeNonMailSubscribersPreserved: true, preservedNativeUsdTotals: true, quoteRevisionProtected: true, duplicateReceiptRejected: true, atomicRollbackVerified: true, authenticatedOwnershipVerified: true, compiledGraphqlSchemaMerged: true }));
 } finally {
   const ids = created.map((o) => o.order_id);
   if (ids.length) {

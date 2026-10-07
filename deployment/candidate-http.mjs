@@ -80,7 +80,7 @@ async function readCatalog(options, env) {
   try {
     await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
     await client.query('SET LOCAL statement_timeout=10000');
-    const products = (await client.query(`SELECT r.request_path AS path,p.uuid FROM url_rewrite r JOIN product p ON p.uuid=r.entity_uuid WHERE r.entity_type='product' AND p.status=1 AND p.visibility=1 AND p.sku ~ '^SHUSHA-L[0-9]+$' ORDER BY r.request_path`)).rows;
+    const products = (await client.query(`SELECT r.request_path AS path,p.uuid FROM url_rewrite r JOIN product p ON p.uuid=r.entity_uuid WHERE r.entity_type='product' AND p.status IS TRUE AND p.visibility IS TRUE AND p.sku ~ '^SHUSHA-L[0-9]+$' ORDER BY r.request_path`)).rows;
     check(products.length > 0 && products.every(item => isProductPath(item.path) && UUID.test(item.uuid)), 'mapped-catalog-empty-or-invalid');
     const exists = (await client.query("SELECT to_regclass('public.shusha_legacy_path') AS ledger")).rows[0].ledger;
     const legacy = exists ? (await client.query('SELECT request_path AS "requestPath",target_path AS "targetPath" FROM shusha_legacy_path ORDER BY request_path')).rows : [];
@@ -211,5 +211,9 @@ async function main() {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
-  main().catch(error => { console.error(JSON.stringify({ passed: false, reason: error instanceof AcceptanceError ? error.message : 'candidate-http-acceptance-failed', detailsWithheld: true, readOnly: true, providerCalls: 0, customerMessages: 0 })); process.exitCode = 1; });
+  main().catch(error => {
+    const errorName = ['Error', 'TypeError', 'SyntaxError', 'AbortError', 'TimeoutError', 'AcceptanceError'].includes(error.name) ? error.name : 'Error';
+    const errorCode = /^[0-9A-Z_]{3,40}$/.test(String(error.code || error.cause?.code || '')) ? String(error.code || error.cause.code) : undefined;
+    console.error(JSON.stringify({ passed: false, reason: error instanceof AcceptanceError ? error.message : 'candidate-http-acceptance-failed', errorName, ...(errorCode ? { errorCode } : {}), detailsWithheld: true, readOnly: true, providerCalls: 0, customerMessages: 0 })); process.exitCode = 1;
+  });
 }
