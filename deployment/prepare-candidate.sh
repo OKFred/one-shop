@@ -1,0 +1,67 @@
+#!/bin/bash
+set -Eeuo pipefail
+umask 077
+# Usage: prepare-candidate.sh RELEASE_DIR BACKUP_DIR IMAGE
+release=$(realpath "$1")
+backup=$(realpath "$2")
+image=$3
+old=${SHUSHA_OLD_CONTAINER:-evershop}
+pg=${SHUSHA_POSTGRES_CONTAINER:-pg}
+db=${SHUSHA_CANDIDATE_DB:-shusha_v2_candidate}
+network=${SHUSHA_DOCKER_NETWORK:-MyEverShop}
+[[ "$db" =~ ^[a-z][a-z0-9_]*_candidate$ ]]
+test -s "$backup/database.dump"
+test -f "$release/source/deployment/config.shusha.json"
+test ! -e "$release/candidate.env"
+test -z "$(docker ps -aq --filter 'name=^/evershop-v2-candidate$')"
+test -z "$(docker exec "$pg" psql -U postgres -d postgres -Atc "SELECT datname FROM pg_database WHERE datname='$db'")"
+test "$(docker inspect "$old" --format '{{.State.Running}}')" = true
+shared=$(docker inspect "$old" --format '{{range .Mounts}}{{if eq .Destination "/app/data/material-library"}}{{.Source}}{{end}}{{end}}')
+media=$(docker inspect "$old" --format '{{range .Mounts}}{{if eq .Destination "/app/media"}}{{.Source}}{{end}}{{end}}')
+wise=$(docker inspect "$old" --format '{{range .Mounts}}{{if eq .Destination "/wise-private"}}{{.Source}}{{end}}{{end}}')
+test -d "$shared" && test -d "$media" && test -f "$wise/receiving.json"
+test -z "$(find "$shared/jobs" -maxdepth 1 -name '*.lock' -print)"
+test ! -e "$shared/.adapter.lock"
+mkdir -p "$release/media-candidate" "$release/data-candidate/material-library" \
+  "$release/private-candidate" "$release/config-candidate" "$release/assets-candidate"
+chmod 700 "$release/private-candidate" "$release/data-candidate"
+cp -a "$media/." "$release/media-candidate/"
+cp -a "$shared/." "$release/data-candidate/material-library/"
+cp -a "$wise/receiving.json" "$release/private-candidate/receiving.json"
+chmod 600 "$release/private-candidate/receiving.json"
+docker cp "$old:/app/public/assets/shusha/." "$release/assets-candidate/"
+cp "$release/source/deployment/config.shusha.json" "$release/config-candidate/default.json"
+cp "$release/source/deployment/config.shusha.json" "$release/config-candidate/production.json"
+docker inspect "$old" --format '{{json .Config.Env}}' | python3 -c '
+import json,sys,os
+old=dict(x.split("=",1) for x in json.load(sys.stdin))
+# Carry only necessary application secrets, never image/build environment.
+names=["DB_HOST","DB_PORT","DB_USER","DB_PASSWORD","COOKIE_SECRET","SESSION_SECRET"]
+new={key:old[key] for key in names if key in old}
+new.update(DB_NAME=sys.argv[2],PORT="3000",TZ="Asia/Shanghai",NODE_ENV="production",
+    EVERSHOP_HOME_URL="http://localhost:5444",PRIVATE_DATA_DIR="/app/data",
+    MATERIAL_LIBRARY_DIR="/app/data/material-library",MATERIAL_MEDIA_DIR="/app/media/source-library",
+    SOURCE_SYNC_BACKUP_DIR="/private/source-price-backups",
+    SHUSHA_WISE_RECEIVING_CONFIG="/private/receiving.json",
+    SUUSHA_PRICE_API_URL="https://suusha.com/Excel/api.php")
+assert all(new.get(key) for key in ["DB_HOST","DB_USER","DB_PASSWORD"])
+with open(sys.argv[1],"x") as f: f.write("".join(key+"="+value+"\n" for key,value in new.items()))
+os.chmod(sys.argv[1],0o600)
+' "$release/candidate.env" "$db"
+docker exec "$pg" createdb -U postgres "$db"
+docker exec -i "$pg" pg_restore -U postgres -d "$db" --exit-on-error < "$backup/database.dump"
+docker create --name evershop-v2-candidate --network "$network" \
+  --env-file "$release/candidate.env" --workdir /app --restart no \
+  -p 127.0.0.1:5444:3000 \
+  -v "$release/config-candidate:/app/config:ro" \
+  -v "$release/private-candidate:/private" \
+  -v "$release/data-candidate:/app/data" \
+  -v "$release/media-candidate:/app/media" \
+  -v "$release/assets-candidate:/app/public/assets/shusha:ro" \
+  "$image" sleep infinity
+docker start evershop-v2-candidate
+docker exec evershop-v2-candidate node deployment/capture-baseline.mjs --output /private/before.private.json
+docker exec evershop-v2-candidate node deployment/migrate-v2.mjs
+docker exec evershop-v2-candidate node deployment/adapt-store-content.mjs --apply --expected-database "$db"
+docker exec evershop-v2-candidate node deployment/verify-baseline.mjs --baseline /private/before.private.json
+printf 'Candidate restored, migrated and baseline-verified; jobs remain disabled.\n'

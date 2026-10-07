@@ -99,16 +99,20 @@ async function configureRuntime(options) {
   return { guard, settings };
 }
 
+export function shippingRiskCounts(orders, shipments, installedOmsVersion = null) {
+  const states = new Map(orders.map(order => [String(order.order_id), order.shipment_status]));
+  const risky = shipments.filter(shipment => ['pending', 'processing'].includes(states.get(String(shipment.shipment_order_id))) || states.get(String(shipment.shipment_order_id)) === null);
+  const willRunBackfill = !installedOmsVersion || sortVersions([installedOmsVersion, '1.0.3'])[0] === installedOmsVersion && installedOmsVersion !== '1.0.3';
+  return { pendingOrders: orders.filter(order => ['pending', 'processing'].includes(order.shipment_status)).length, riskyLegacyShipments: willRunBackfill ? risky.length : 0 };
+}
+
 async function nativeShippingSnapshot(pool) {
   const tables = (await pool.query("SELECT to_regclass('public.order') IS NOT NULL AS orders, to_regclass('public.shipment') IS NOT NULL AS shipments, to_regclass('public.migration') IS NOT NULL AS migration")).rows[0];
   if (!tables.orders || !tables.shipments) return { orders: [], shipments: [], counts: { pendingOrders: 0, riskyLegacyShipments: 0 }, installedOmsVersion: null };
   const orders = (await pool.query('SELECT order_id,uuid,shipment_status,payment_method FROM "order" ORDER BY order_id')).rows;
   const shipments = (await pool.query('SELECT * FROM shipment ORDER BY shipment_id')).rows;
-  const states = new Map(orders.map(order => [order.order_id, order.shipment_status]));
-  const risky = shipments.filter(shipment => ['pending', 'processing'].includes(states.get(shipment.shipment_order_id)) || states.get(shipment.shipment_order_id) === null);
   const installedOmsVersion = tables.migration ? (await pool.query("SELECT version FROM migration WHERE module='oms'")).rows[0]?.version || null : null;
-  const willRunBackfill = !installedOmsVersion || sortVersions([installedOmsVersion, '1.0.3'])[0] === installedOmsVersion && installedOmsVersion !== '1.0.3';
-  return { schemaVersion: 1, capturedAt: new Date().toISOString(), orders, shipments, installedOmsVersion, counts: { pendingOrders: orders.filter(order => ['pending', 'processing'].includes(order.shipment_status)).length, riskyLegacyShipments: willRunBackfill ? risky.length : 0 } };
+  return { schemaVersion: 1, capturedAt: new Date().toISOString(), orders, shipments, installedOmsVersion, counts: shippingRiskCounts(orders, shipments, installedOmsVersion) };
 }
 
 async function emitAndExit(message, code) {
