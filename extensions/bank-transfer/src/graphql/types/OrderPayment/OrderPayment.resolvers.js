@@ -2,6 +2,8 @@
 import { camelCase } from '@evershop/evershop/lib/util/camelCase';
 import { getOrderQuote, customerUrl } from '../../../services/orderPayments.js';
 import { orderAccess, authenticatedCustomerId, canonicalOrderUuid } from '../../../services/paymentAccess.js';
+import { getConfig } from '@evershop/evershop/lib/util/getConfig';
+import { canAccessShippingPreferenceCart, shippingPreferenceIdentity } from '../../../services/shippingPreferenceAccess.js';
 
 async function allowedOrder(context, uuid) {
   let access;
@@ -41,7 +43,21 @@ export default {
       return order?.payment_method === 'banktransfer' ? paymentOrder(order) : null;
     }
   },
+  Cart: {
+    // Native cart(id) is UUID-addressable. Free-form customer input must not
+    // inherit that access; only myCart's actual session/customer may read it.
+    shushaShippingPreference: (cart, _, context) => {
+      const identity = shippingPreferenceIdentity({
+        signedCookies: context.signedCookies,
+        getCurrentCustomer: () => context.customer
+      }, getConfig('system.session.cookieName', 'sid'));
+      return canAccessShippingPreferenceCart({
+        sid: cart.sid, status: cart.status === true || cart.status === 1, customer_id: cart.customerId
+      }, identity) ? cart.shushaShippingPreference ?? null : null;
+    }
+  },
   Order: {
+    shushaShippingPreference: async ({ uuid }, _, context) => (await allowedOrder(context, uuid))?.shusha_shipping_preference || null,
     bankTransferQuote: async ({ uuid, orderId }, _, context) => (await allowedOrder(context, uuid)) ? getOrderQuote(orderId, context.pool) : null,
     bankTransferPaymentUrl: async ({ uuid }, _, context) => (await allowedOrder(context, uuid))?.payment_method === 'banktransfer' ? customerUrl(uuid) : null
   },

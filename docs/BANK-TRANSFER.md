@@ -6,6 +6,17 @@ method in USD, expressly labelled **Shipping quotation pending**. Other payment
 and shipping factories remain installed but cannot be selected while this mode
 is enabled. New requests start with payment and shipment `pending`.
 
+Customers can optionally enter a preferred courier at checkout. Empty input
+means **SHUSHA recommendation**; this is a preference, not an available service
+or a confirmed rate. The name is saved separately from the shipping-provider
+snapshot and shown in admin customer notes and the checkout success summary.
+It never changes the manual quotation provider, shipping fee, payment quote or
+shipment state. Extension migration `1.0.2` adds nullable, bounded text columns
+to cart and order without rewriting historical records. Checkout access and
+GraphQL preference reads require the current cart/order owner. Review the
+public checkout hook, `cartFields` registry, cart-to-order export and
+`checkoutShippingMethodsAfter` / `orderEditCustomerNotes` areas on upgrades.
+
 ## Private configuration
 
 Set `SHUSHA_WISE_RECEIVING_CONFIG` to an absolute, read-only mounted JSON file
