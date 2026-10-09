@@ -1,14 +1,20 @@
 import { addProcessor } from '@evershop/evershop/lib/util/registry';
 import { getConfig } from '@evershop/evershop/lib/util/getConfig';
-import { registerShippingProvider, registerPaymentMethod, hookBeforeSaveOrder, hookBeforeSaveShippingAddress } from '@evershop/evershop/checkout/services';
+import { registerShippingProvider, registerPaymentMethod, hookBeforeCheckout, hookBeforeSaveOrder, hookBeforeSaveShippingAddress } from '@evershop/evershop/checkout/services';
 import { resolveOrderStatus } from '@evershop/evershop/oms/services';
 import { provinces } from '@evershop/evershop/lib/locale/provinces';
 import { isEnabled, displayName } from './services/settings.js';
 import { manualQuoteProvider, PROVIDER_CODE, CODE, validateQuoteAddress } from './services/manualQuote.js';
 import { installAutomaticEmailPolicy } from './services/automaticEmails.js';
+import { shippingPreferenceField, saveCheckoutShippingPreference } from './services/shippingPreference.js';
+import { normalizeShippingPreference } from './services/shippingPreferenceValidation.js';
 
 export default () => {
   installAutomaticEmailPolicy();
+  addProcessor('cartFields', (fields) => fields.concat([shippingPreferenceField]), 30);
+  hookBeforeCheckout(async (cartUuid, data) => {
+    if (await isEnabled()) await saveCheckoutShippingPreference(cartUuid, data);
+  });
   registerShippingProvider(manualQuoteProvider);
   registerPaymentMethod({
     init: async () => ({ code: 'banktransfer', name: await displayName() }),
@@ -48,6 +54,8 @@ export default () => {
   });
   hookBeforeSaveOrder(async (cart) => {
     if (!(await isEnabled())) return;
+    const preference = cart.getData('shusha_shipping_preference');
+    if (normalizeShippingPreference(preference) !== preference) throw new Error('Preferred courier must be normalized before checkout');
     if (cart.getData('payment_method') !== 'banktransfer') throw new Error('Select T/T payment after confirmation');
     const shipping = cart.getData('shipping_method_data');
     if (shipping?.provider_code !== PROVIDER_CODE || shipping?.method_code !== CODE) throw new Error('T/T order requests require manual shipping quotation');

@@ -17,8 +17,13 @@ type BankTransferQuote {
 }
 
 extend type Order {
+  shushaShippingPreference: String
   bankTransferQuote: BankTransferQuote
   bankTransferPaymentUrl: String
+}
+
+extend type Cart {
+  shushaShippingPreference: String
 }
 
 # This bearer-link type excludes names, email, addresses and order items.
