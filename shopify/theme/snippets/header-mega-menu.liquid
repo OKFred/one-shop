@@ -8,8 +8,13 @@
 <nav class="header__inline-menu">
   <ul class="list-menu list-menu--inline" role="list">
     {%- for link in section.settings.menu.links -%}
+{%- capture shusha_link_url -%}{%- render 'shusha-link-url', link: link -%}{%- endcapture -%}
+{%- assign shusha_link_url = shusha_link_url | strip -%}
+{%- if shusha_link_url == blank -%}{%- continue -%}{%- endif -%}
+{%- capture shusha_link_children -%}{%- render 'shusha-menu-has-links', links: link.links -%}{%- endcapture -%}
+{%- assign shusha_link_children = shusha_link_children | strip -%}
       <li>
-        {%- if link.links != blank -%}
+        {%- if shusha_link_children != blank -%}
           <header-menu>
             <details id="Details-HeaderMenu-{{ forloop.index }}" class="mega-menu">
               <summary
@@ -35,10 +40,15 @@
                   role="list"
                 >
                   {%- for childlink in link.links -%}
+{%- capture shusha_childlink_url -%}{%- render 'shusha-link-url', link: childlink -%}{%- endcapture -%}
+{%- assign shusha_childlink_url = shusha_childlink_url | strip -%}
+{%- if shusha_childlink_url == blank -%}{%- continue -%}{%- endif -%}
+{%- capture shusha_childlink_children -%}{%- render 'shusha-menu-has-links', links: childlink.links -%}{%- endcapture -%}
+{%- assign shusha_childlink_children = shusha_childlink_children | strip -%}
                     <li>
                       <a
                         id="HeaderMenu-{{ link.handle }}-{{ childlink.handle }}"
-                        href="{{ childlink.url }}"
+                        href="{{ shusha_childlink_url | escape }}"
                         class="mega-menu__link mega-menu__link--level-2 link{% if childlink.current %} mega-menu__link--active{% endif %}"
                         {% if childlink.current %}
                           aria-current="page"
@@ -46,13 +56,16 @@
                       >
                         {{ childlink.title | escape }}
                       </a>
-                      {%- if childlink.links != blank -%}
+                      {%- if shusha_childlink_children != blank -%}
                         <ul class="list-unstyled" role="list">
                           {%- for grandchildlink in childlink.links -%}
+{%- capture shusha_grandchildlink_url -%}{%- render 'shusha-link-url', link: grandchildlink -%}{%- endcapture -%}
+{%- assign shusha_grandchildlink_url = shusha_grandchildlink_url | strip -%}
+{%- if shusha_grandchildlink_url == blank -%}{%- continue -%}{%- endif -%}
                             <li>
                               <a
                                 id="HeaderMenu-{{ link.handle }}-{{ childlink.handle }}-{{ grandchildlink.handle }}"
-                                href="{{ grandchildlink.url }}"
+                                href="{{ shusha_grandchildlink_url | escape }}"
                                 class="mega-menu__link link{% if grandchildlink.current %} mega-menu__link--active{% endif %}"
                                 {% if grandchildlink.current %}
                                   aria-current="page"
@@ -73,7 +86,7 @@
         {%- else -%}
           <a
             id="HeaderMenu-{{ link.handle }}"
-            href="{{ link.url }}"
+            href="{{ shusha_link_url | escape }}"
             class="header__menu-item list-menu__item link link--text focus-inset"
             {% if link.current %}
               aria-current="page"
