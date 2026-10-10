@@ -1,0 +1,15 @@
+{
+  "name": "Footer",
+  "type": "footer",
+  "sections": {
+    "footer": {
+      "type": "shusha-footer",
+      "settings": {
+        "menu": "shusha-footer"
+      }
+    }
+  },
+  "order": [
+    "footer"
+  ]
+}
