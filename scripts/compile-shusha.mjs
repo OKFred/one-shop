@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
-const extensions = ['bank-transfer', 'retail-pricing', 'storefront-identity', 'storefront-brand'];
+const extensions = ['bank-transfer', 'retail-pricing', 'storefront-identity', 'storefront-brand', 'shopify-bridge'];
 const compiler = path.resolve('node_modules/@swc/cli/bin/swc.js');
 for (const name of extensions) {
   const source = path.resolve('extensions', name, 'src');

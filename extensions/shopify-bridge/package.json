@@ -1,0 +1,13 @@
+{
+  "name": "@shusha/shopify-bridge",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "license": "GPL-3.0-only",
+  "description": "Private server-side SHUSHA Shopify synchronization and unified operations",
+  "dependencies": { "sanitize-html": "2.17.0", "body-parser": "1.20.5" },
+  "scripts": {
+    "build": "swc src -d dist --config-file .swcrc --copy-files --strip-leading-paths",
+    "test": "npm run build && node --test tests/*.test.mjs"
+  }
+}

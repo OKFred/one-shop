@@ -75,6 +75,8 @@ media/
 !/extensions/storefront-identity/**
 !/extensions/storefront-brand/
 !/extensions/storefront-brand/**
+!/extensions/shopify-bridge/
+!/extensions/shopify-bridge/**
 !/docs/
 /docs/*
 !/docs/SUPPLIER-PRICES.md
@@ -82,6 +84,8 @@ media/
 !/docs/SHUSHA-MIGRATION.md
 !/docs/CATALOG-OPERATIONS.md
 !/docs/shusha-material-operations.md
+!/docs/shopify-inventory-compatibility.md
+!/docs/shopify-payment-compatibility.md
 **/*.private.json
 **/*.private.html
 **/*.private.js
