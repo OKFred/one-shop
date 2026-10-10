@@ -1,0 +1,73 @@
+{
+  "sections": {
+    "hero": {
+      "type": "shusha-hero",
+      "settings": {
+        "primary_link": "shopify://collections/all",
+        "secondary_link": "shopify://pages/how-to-order"
+      }
+    },
+    "categories": {
+      "type": "shusha-categories",
+      "blocks": {
+        "dresses": {
+          "type": "collection",
+          "settings": {
+            "collection": "dresses"
+          }
+        },
+        "pants": {
+          "type": "collection",
+          "settings": {
+            "collection": "pants"
+          }
+        },
+        "tops": {
+          "type": "collection",
+          "settings": {
+            "collection": "tops"
+          }
+        }
+      },
+      "block_order": [
+        "dresses",
+        "pants",
+        "tops"
+      ],
+      "settings": {}
+    },
+    "latest": {
+      "type": "featured-collection",
+      "settings": {
+        "title": "New arrivals",
+        "heading_size": "h2",
+        "description": "",
+        "show_description": false,
+        "description_style": "body",
+        "collection": "new-arrivals",
+        "products_to_show": 6,
+        "columns_desktop": 3,
+        "color_scheme": "scheme-1",
+        "full_width": false,
+        "show_view_all": true,
+        "view_all_style": "solid",
+        "enable_desktop_slider": false,
+        "swipe_on_mobile": false,
+        "image_ratio": "adapt",
+        "image_shape": "default",
+        "show_secondary_image": true,
+        "show_vendor": false,
+        "show_rating": false,
+        "quick_add": "none",
+        "columns_mobile": "2",
+        "padding_top": 40,
+        "padding_bottom": 52
+      }
+    }
+  },
+  "order": [
+    "hero",
+    "categories",
+    "latest"
+  ]
+}

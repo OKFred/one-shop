@@ -1,0 +1,41 @@
+<section class="shusha-hero page-width" aria-labelledby="ShushaHero-{{ section.id }}">
+  <div class="shusha-hero__inner">
+    <div class="shusha-hero__copy">
+      <p class="shusha-eyebrow">{{ section.settings.eyebrow | escape }}</p>
+      <h1 id="ShushaHero-{{ section.id }}">{{ section.settings.heading | escape }}</h1>
+      <div class="shusha-hero__description rte">{{ section.settings.description }}</div>
+      <div class="shusha-hero__actions">
+        <a class="shusha-primary" href="{{ section.settings.primary_link | default: routes.all_products_collection_url }}">{{ section.settings.primary_label | escape }}</a>
+        {% if section.settings.secondary_link != blank %}
+          <a class="shusha-secondary" href="{{ section.settings.secondary_link }}">{{ section.settings.secondary_label | escape }}</a>
+        {% endif %}
+      </div>
+    </div>
+    <figure class="shusha-hero__media">
+      {% if section.settings.image != blank %}
+        {{ section.settings.image | image_url: width: 1600 | image_tag: widths: '400, 750, 1100, 1600', sizes: '(min-width: 750px) 50vw, 100vw', fetchpriority: 'high' }}
+      {% else %}
+        {{ 'product-apparel-1' | placeholder_svg_tag: 'placeholder-svg' }}
+      {% endif %}
+    </figure>
+  </div>
+  <div class="shusha-note"><span>{{ section.settings.note_left | escape }}</span><span>{{ section.settings.note_right | escape }}</span></div>
+</section>
+{% schema %}
+{
+  "name": "SHUSHA hero",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "Eyebrow", "default": "SHUSHA" },
+    { "type": "text", "id": "heading", "label": "Heading", "default": "Made for your everyday." },
+    { "type": "richtext", "id": "description", "label": "Description", "default": "<p>Clothing from Sri Lanka, with personal support for worldwide order requests.</p>" },
+    { "type": "image_picker", "id": "image", "label": "Reviewed hero image" },
+    { "type": "text", "id": "primary_label", "label": "Primary label", "default": "Explore the collection" },
+    { "type": "url", "id": "primary_link", "label": "Primary link" },
+    { "type": "text", "id": "secondary_label", "label": "Secondary label", "default": "How to order" },
+    { "type": "url", "id": "secondary_link", "label": "Secondary link" },
+    { "type": "text", "id": "note_left", "label": "Left note", "default": "Worldwide order requests" },
+    { "type": "text", "id": "note_right", "label": "Right note", "default": "Shipping and payment confirmed personally" }
+  ],
+  "presets": [{ "name": "SHUSHA hero" }]
+}
+{% endschema %}

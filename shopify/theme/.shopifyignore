@@ -1,0 +1,5 @@
+LICENSE.md
+UPSTREAM.md
+merchant-content.example.json
+.theme-check.yml
+*.private.*

@@ -1,0 +1,7 @@
+{% if cart != empty %}
+  <div class="shusha-courier">
+    <label for="ShushaCourier">Preferred courier (optional)</label>
+    <input id="ShushaCourier" type="text" name="attributes[Preferred courier]" form="cart" maxlength="80" value="{{ cart.attributes['Preferred courier'] | escape }}" placeholder="SHUSHA recommendation" aria-describedby="ShushaCourierHelp" autocomplete="off">
+    <p id="ShushaCourierHelp" class="shusha-order-notice">Tell us your preference. We will confirm availability, shipping cost and payment instructions before you pay. This is a preference, not a courier booking.</p>
+  </div>
+{% endif %}

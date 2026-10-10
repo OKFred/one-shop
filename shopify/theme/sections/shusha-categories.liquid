@@ -1,0 +1,30 @@
+<section class="shusha-categories page-width" aria-labelledby="ShushaCategories-{{ section.id }}">
+  <h2 class="shusha-section-title h1" id="ShushaCategories-{{ section.id }}">{{ section.settings.heading | escape }}</h2>
+  <div class="shusha-category-grid">
+    {% for block in section.blocks %}
+      {% assign category = block.settings.collection %}
+      {% if category != blank %}
+        {% assign category_image = category.image | default: category.products.first.featured_image %}
+        <a class="shusha-category" href="{{ category.url }}" {{ block.shopify_attributes }}>
+          <span class="shusha-category__image">
+            {% if category_image != blank %}
+              {{ category_image | image_url: width: 900 | image_tag: loading: 'lazy', widths: '300, 600, 900', sizes: '(min-width: 750px) 33vw, 32vw' }}
+            {% else %}
+              {{ 'collection-apparel-1' | placeholder_svg_tag: 'placeholder-svg' }}
+            {% endif %}
+          </span>
+          <span class="shusha-category__label">{{ category.title | escape }}<span aria-hidden="true">↗</span></span>
+        </a>
+      {% endif %}
+    {% endfor %}
+  </div>
+</section>
+{% schema %}
+{
+  "name": "SHUSHA categories",
+  "settings": [{ "type": "text", "id": "heading", "label": "Heading", "default": "Find your style" }],
+  "blocks": [{ "type": "collection", "name": "Collection", "settings": [{ "type": "collection", "id": "collection", "label": "Collection" }] }],
+  "max_blocks": 3,
+  "presets": [{ "name": "SHUSHA categories" }]
+}
+{% endschema %}

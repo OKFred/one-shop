@@ -1,0 +1,7 @@
+{% comment %}Simple Icons (CC0-1.0), bundled from the existing Iconify offline exports. No external icon requests.{% endcomment %}
+<span class="shusha-brand-icon shusha-brand-icon--{{ brand | escape }}" aria-hidden="true">
+  {% case brand %}
+    {% when 'wise' %}{{ 'shusha-icon-wise.svg' | inline_asset_content }}
+    {% when 'whatsapp' %}{{ 'shusha-icon-whatsapp.svg' | inline_asset_content }}
+  {% endcase %}
+</span>

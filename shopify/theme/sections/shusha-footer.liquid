@@ -1,0 +1,27 @@
+<footer class="shusha-footer page-width">
+  <div class="shusha-footer__grid">
+    <div><strong>SHUSHA</strong><div class="rte">{{ section.settings.description }}</div></div>
+    <nav aria-label="Customer information">
+      {% for link in section.settings.menu.links %}<a class="link" href="{{ link.url }}">{{ link.title | escape }}</a>{% endfor %}
+    </nav>
+    <div class="shusha-footer__support">
+      {% if settings.shusha_whatsapp_sri_lanka != blank %}
+        <a class="shusha-brand-link link" href="{{ settings.shusha_whatsapp_sri_lanka }}" target="_blank" rel="noopener noreferrer">{% render 'shusha-brand-icon', brand: 'whatsapp' %}WhatsApp · Sri Lanka</a>
+      {% endif %}
+      {% if settings.shusha_whatsapp_china != blank %}
+        <a class="shusha-brand-link link" href="{{ settings.shusha_whatsapp_china }}" target="_blank" rel="noopener noreferrer">{% render 'shusha-brand-icon', brand: 'whatsapp' %}WhatsApp · China</a>
+      {% endif %}
+      <span class="shusha-brand-link">{% render 'shusha-brand-icon', brand: 'wise' %}Wise / bank transfer after confirmation</span>
+    </div>
+  </div>
+  <p class="caption">&copy; {{ 'now' | date: '%Y' }} SHUSHA</p>
+</footer>
+{% schema %}
+{
+  "name": "SHUSHA footer",
+  "settings": [
+    { "type": "richtext", "id": "description", "label": "Description", "default": "<p>Clothing from Sri Lanka, with personal support for worldwide order requests.</p>" },
+    { "type": "link_list", "id": "menu", "label": "Customer information menu", "default": "shusha-footer" }
+  ]
+}
+{% endschema %}
