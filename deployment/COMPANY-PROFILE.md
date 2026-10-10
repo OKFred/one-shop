@@ -39,6 +39,10 @@ Build the preparation input's `publicProfile` from the same validated file. Any 
 
 `--theme` creates a **private local theme copy** with the approved public settings. Keep the tracked theme's company settings empty. Theme generation and content apply are separate operations; neither publishes the live theme. Upload/preview only as an unpublished theme until the separately authorized visual acceptance and cutover. Do not treat a successful preparation or stored-copy check as proof of a published design.
 
+If the native Shopify editor already has the approved `about` or `contact` page, do not create a replacement or silently take ownership. `scripts/shopify/adopt-public-pages.mjs --handles about,contact` prepares a private plan under `PRIVATE_DATA_DIR/shopify/adoption`. Review the selected native UUIDs, Shopify page identities and current public copy. Apply only that saved plan with `--apply --plan ORIGINAL_PRIVATE_PLAN --reviewed-sha256 EXACT_SHA256` and the existing bridge/content write flags. The helper associates the existing pages using owner metadata and private mappings; it does not change their body, title, handle, template or publication state.
+
+Adoption uses the same content-sync lock and rechecks the source, public profile, remote pages and mappings before writing. A conflicting owner or changed page blocks the saved plan. If the owner write has an unknown outcome, retain its original frozen plan and journal: reconcile through fresh owner readback instead of sending the mutation again or preparing a replacement plan. Do not run normal content apply until the association and intended next content plan have been reviewed separately.
+
 ## Focused rehearsal
 
 `tests/shusha/company-content.test.mjs` has two local checks and seven real PostgreSQL cases, including stale review/profile, missing pages, wrong database, protected-data contamination and complete rollback. Set `SHUSHA_COMPANY_CONTENT_TEST_DATABASE_URL` to a dedicated loopback database whose name ends in `_test`, then run:
