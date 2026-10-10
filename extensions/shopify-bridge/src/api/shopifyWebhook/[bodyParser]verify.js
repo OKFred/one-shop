@@ -1,7 +1,7 @@
 import { verifyWebhookHmac, validateWebhookEnvelope } from '../../services/security.js';
 import { bridgeRuntime } from '../../services/runtime.js';
-const TOPICS = ['orders/create','orders/updated','orders/cancelled','refunds/create','fulfillments/create','fulfillments/update','app/uninstalled'];
-export default async (request,response) => {
+const TOPICS = ['orders/create','orders/updated','orders/paid','orders/cancelled','refunds/create','fulfillments/create','fulfillments/update','app/uninstalled'];
+export default async (request,response,next) => {
   try {
     const {config,pool} = bridgeRuntime();
     if (!Buffer.isBuffer(request.body) || !verifyWebhookHmac(request.body,request.get('X-Shopify-Hmac-Sha256'),config.clientSecret)) return response.status(401).end();

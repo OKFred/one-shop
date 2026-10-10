@@ -1,6 +1,6 @@
 import { createOAuthState, createAuthorizationUrl } from '../../services/security.js';
 import { bridgeRuntime } from '../../services/runtime.js';
-export default async (request,response) => {
+export default async (request,response,next) => {
   try {
     const user = request.getCurrentUser();
     if (!user?.uuid) return response.status(401).json({error:'ADMIN_REQUIRED'});

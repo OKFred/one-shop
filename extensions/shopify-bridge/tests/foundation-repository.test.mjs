@@ -2,16 +2,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import express from 'express';
 import { createHmac } from 'node:crypto';
+import { registerHooks } from 'node:module';
 import { createRepositories } from '../src/services/repositories.js';
 import { createTokenStore, encryptTokens } from '../src/services/tokenStore.js';
 import migration from '../src/migration/Version-1.0.0.js';
 import rawParser from '../src/api/shopifyWebhook/[context]bodyParser[verify].js';
-import { verifyWebhookHmac } from '../src/services/security.js';
+import { createOAuthState, verifyWebhookHmac } from '../src/services/security.js';
 import { parseFromFile } from '../../../packages/evershop/dist/lib/middleware/parseFromFile.js';
 import { sortMiddlewares } from '../../../packages/evershop/dist/lib/middleware/sort.js';
+import { buildMiddlewareFunction } from '../../../packages/evershop/dist/lib/middleware/buildMiddlewareFunction.js';
 
 function poolFixture() {
   const log = []; const records = new Map(); let envelope; let connects = 0; let releases = 0;
@@ -111,4 +113,69 @@ test('real raw-parser HTTP pipeline verifies literal whitespace bytes and reject
   assert.equal((await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Hmac-Sha256': signature }, body: body.replace(' ', '') })).status, 401);
   assert.equal((await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' }, body: 'synthetic' })).status, 415);
   assert.equal((await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: ' '.repeat(2 * 1024 * 1024 + 1) })).status, 413);
+});
+
+test('actual native status and OAuth wrappers stop before eNext and bind uninstall identity to the verified installed shop', async () => {
+  const source = fileURLToPath(new URL('../src/api/', import.meta.url));
+  const poolParent = pathToFileURL(path.join(source, 'shopifyStatus/[auth]status.js')).href;
+  const runtimeParents = new Set(['shopifyOAuthStart/[auth]start.js', 'shopifyOAuthCallback/[auth]callback.js'].map(route => pathToFileURL(path.join(source, route)).href));
+  const slot = Symbol.for('shusha.bridge.native-wrapper.synthetic');
+  const shop = 'synthetic-native-wrapper.myshopify.com';
+  const config = { enabled: true, shop, clientId: 'synthetic-client', clientSecret: 'synthetic-client-secret', scopes: ['read_products'], redirectUri: 'https://synthetic-app.example/api/shopify/oauth/callback' };
+  const merchant = { uuid: 'synthetic-merchant-session-uuid' };
+  const operations = new Map(); const nonces = new Set(); const exchanges = [];
+  let installedShop = { id: 'gid://shopify/Shop/321', myshopifyDomain: shop };
+  let failPool = false; let advanced = 0;
+  const fixture = {
+    pool: { async query(sql) { if (failPool) throw new Error('synthetic private database failure'); return { rows: [{ n: sql.includes('shusha_bridge_token') ? 1 : 3 }] }; } },
+    runtime: { config, repositories: {
+      async consumeNonce(nonce) { if (nonces.has(nonce)) return false; nonces.add(nonce); return true; },
+      mappings: { async saveOperation(key, value) { operations.set(key, value); } }
+    }, tokens: { async exchangeCode(code) { exchanges.push(code); } },
+    client: { async request(document) { assert.match(document, /shop\s*\{\s*id myshopifyDomain/); return { shop: installedShop }; } } }
+  };
+  // Only the real route sources' native DB/runtime imports are replaced. The native
+  // wrapper, route handlers, HMAC/state verification and HTTP response methods run unchanged.
+  globalThis[slot] = fixture;
+  const stub = exportText => `data:text/javascript,${encodeURIComponent(`const fixture = globalThis[Symbol.for('shusha.bridge.native-wrapper.synthetic')]; ${exportText}`)}`;
+  const hooks = registerHooks({ resolve(specifier, context, nextResolve) {
+    const parent = context.parentURL?.split('?')[0];
+    if (specifier === '@evershop/evershop/lib/postgres' && parent === poolParent) return { url: stub('export const pool = fixture.pool;'), shortCircuit: true };
+    if (specifier === '../../services/runtime.js' && runtimeParents.has(parent)) return { url: stub('export function bridgeRuntime() { return fixture.runtime; }'), shortCircuit: true };
+    return nextResolve(specifier, context);
+  } });
+  const app = express();
+  app.use((request, response, next) => { response.debugMiddlewares = []; request.getCurrentUser = () => request.get('X-Synthetic-Admin') === 'yes' ? merchant : null; next(); });
+  for (const [route, id, filename] of [['status', 'status', 'shopifyStatus/[auth]status.js'], ['start', 'start', 'shopifyOAuthStart/[auth]start.js'], ['callback', 'callback', 'shopifyOAuthCallback/[auth]callback.js']]) {
+    app.get(`/${route}`, buildMiddlewareFunction(id, path.join(source, filename)), (request, response) => { advanced++; if (!response.headersSent) response.status(500).json({ error: 'NATIVE_RESPONSE_CONTINUED' }); });
+  }
+  app.use((error, request, response, next) => { advanced++; if (!response.headersSent) response.status(500).json({ error: 'SYNTHETIC_WRAPPER_FAILURE' }); });
+  const server = await new Promise(resolve => { const listener = app.listen(0, '127.0.0.1', () => resolve(listener)); });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const fetchRoute = route => fetch(`${base}/${route}`, { headers: { 'X-Synthetic-Admin': 'yes' }, redirect: 'manual' });
+  const callbackQuery = (state = createOAuthState({ shop, sessionId: merchant.uuid, secret: config.clientSecret })) => {
+    const query = { code: 'synthetic-offline-authorization-code', shop, state, timestamp: String(Math.floor(Date.now() / 1000)) };
+    const message = Object.entries(query).sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => `${key}=${value}`).join('&');
+    return new URLSearchParams({ ...query, hmac: createHmac('sha256', config.clientSecret).update(message).digest('hex') }).toString();
+  };
+  try {
+    const status = await fetchRoute('status'); assert.equal(status.status, 200); assert.match(status.headers.get('cache-control'), /no-store/);
+    assert.deepEqual(await status.json(), { data: { enabled: process.env.SHOPIFY_BRIDGE_ENABLED === 'true', writesEnabled: process.env.SHOPIFY_BRIDGE_WRITES_ENABLED === 'true', connected: true, mappedStyles: 3 } });
+    failPool = true; const unavailable = await fetchRoute('status'); assert.equal(unavailable.status, 503); assert.deepEqual(await unavailable.json(), { error: 'SHOPIFY_BRIDGE_NOT_MIGRATED' }); failPool = false;
+    const start = await fetchRoute('start'); assert.equal(start.status, 302); assert.match(start.headers.get('cache-control'), /no-store/);
+    const authorization = new URL(start.headers.get('location')); assert.equal(authorization.host, shop); assert.equal(authorization.searchParams.get('redirect_uri'), config.redirectUri); assert.ok(authorization.searchParams.get('state'));
+    assert.equal((await fetch(`${base}/start`, { redirect: 'manual' })).status, 401);
+    const signedQuery = callbackQuery(); const callback = await fetchRoute(`callback?${signedQuery}`);
+    assert.equal(callback.status, 302); assert.equal(callback.headers.get('location'), '/admin/shopify-bridge?authorized=1'); assert.match(callback.headers.get('cache-control'), /no-store/);
+    assert.deepEqual(operations.get(`installation:${shop}`), { kind: 'installation', status: 'complete', shop, shopId: '321' });
+    assert.equal(exchanges.length, 1);
+    assert.equal((await fetchRoute(`callback?${signedQuery}`)).status, 400); assert.equal(exchanges.length, 1);
+    operations.clear(); installedShop = { id: 'gid://shopify/Shop/999', myshopifyDomain: 'synthetic-foreign.myshopify.com' };
+    const wrongShop = await fetchRoute(`callback?${callbackQuery()}`); assert.equal(wrongShop.status, 400); assert.deepEqual(await wrongShop.json(), { error: 'SHOPIFY_AUTHORIZATION_FAILED' }); assert.equal(operations.size, 0);
+    installedShop = { id: 'gid://shopify/Product/321', myshopifyDomain: shop };
+    assert.equal((await fetchRoute(`callback?${callbackQuery()}`)).status, 400); assert.equal(operations.size, 0);
+    assert.equal(advanced, 0, 'terminal actual handlers must never advance native eNext/default response after sending');
+  } finally {
+    await new Promise(resolve => server.close(resolve)); hooks.deregister(); delete globalThis[slot];
+  }
 });

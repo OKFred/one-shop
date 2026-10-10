@@ -16,7 +16,8 @@
       { "name": "bank-transfer", "resolve": "extensions/bank-transfer", "enabled": true, "priority": 30 },
       { "name": "retail-pricing", "resolve": "extensions/retail-pricing", "enabled": true, "priority": 100 },
       { "name": "storefront-identity", "resolve": "extensions/storefront-identity", "enabled": true, "priority": 110 },
-      { "name": "storefront-brand", "resolve": "extensions/storefront-brand", "enabled": true, "priority": 120 }
+      { "name": "storefront-brand", "resolve": "extensions/storefront-brand", "enabled": true, "priority": 120 },
+      { "name": "shopify-bridge", "resolve": "extensions/shopify-bridge", "enabled": true, "priority": 130 }
     ],
     "jobs": []
   }
