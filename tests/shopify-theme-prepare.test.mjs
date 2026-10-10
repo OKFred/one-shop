@@ -6,6 +6,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { normalizePublicContent, validatePreparationInput, buildStorePreparation, validatePreparedStore,
   applyPreparedStore, prepareStore, verifyHeroOriginal } from '../scripts/shopify/prepare-store.mjs';
+import { validatePublicMerchantProfile } from '../scripts/merchant/public-profile.mjs';
 
 const shop = 'synthetic-preparation.myshopify.com';
 const sourceUuid = '11000000-0000-4000-8000-000000000001';
@@ -95,6 +96,21 @@ test('explicit reviewed hash, feature flags and current source proof gate all co
   assert.throws(() => validatePreparedStore(tampered), /hash differs/);
   h.pages = [{ uuid: pageUuid, url_key: 'about', name: 'About', content: '<p>New source text</p>' }];
   await assert.rejects(applyPreparedStore({ ...options, env: flags }), /source.*changed/);
+  assert.equal(writes, 0); assert.equal(h.operations.size, 0);
+});
+
+test('company profile changes invalidate prepared theme and content before any provider writes', async () => {
+  const h = harness();
+  let currentProfile = validatePublicMerchantProfile({ schemaVersion: 1, shopName: 'SHUSHA',
+    address: { line1: '10 Example Street', city: 'Example City', country: 'Example Country', countryCode: 'ZZ' } });
+  const selected = { ...input(), publicProfile: structuredClone(currentProfile) };
+  const reload = () => build(h, { input: selected, profileProvider: async () => currentProfile });
+  const prepared = await reload(); let writes = 0;
+  assert.equal(prepared.plan.pages[0].templateSuffix, 'about');
+  assert.equal(prepared.merchant.publicProfile.address.line1, currentProfile.address.line1);
+  currentProfile = { ...currentProfile, address: { ...currentProfile.address, line1: '11 Example Street' } };
+  await assert.rejects(applyPreparedStore({ runtime: h.runtime, env: flags, prepared, reviewedSha256: prepared.preparedSha256,
+    reload, synchronizerFactory: () => ({ async sync() { writes++; return {}; } }) }), /profile changed/);
   assert.equal(writes, 0); assert.equal(h.operations.size, 0);
 });
 

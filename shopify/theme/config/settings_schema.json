@@ -1468,12 +1468,19 @@
     ]
   },
   {
-    "name": "SHUSHA support",
+    "name": "SHUSHA company & support",
     "settings": [
       {
         "type": "paragraph",
-        "content": "Only public support links belong here. Never add bank details or order payment links."
+        "content": "Approved public company and support details only. Leave unconfirmed fields blank. Never add bank details or order payment links."
       },
+      { "type": "text", "id": "shusha_business_name", "label": "Business name (optional)" },
+      { "type": "text", "id": "shusha_business_address_line1", "label": "Business address · line 1" },
+      { "type": "text", "id": "shusha_business_address_line2", "label": "Business address · line 2" },
+      { "type": "text", "id": "shusha_business_city", "label": "City" },
+      { "type": "text", "id": "shusha_business_postal_code", "label": "Postal code" },
+      { "type": "text", "id": "shusha_business_country", "label": "Country" },
+      { "type": "text", "id": "shusha_support_email", "label": "Public support email (optional)" },
       {
         "type": "url",
         "id": "shusha_whatsapp_sri_lanka",

@@ -24,3 +24,27 @@ HTTP, Sharp or installed server fonts:
 ```sh
 node scripts/tests/native-logo-rendering.mjs
 ```
+
+The native Footer component alias preserves the global editable `footerTop` and
+`footerMiddle*` areas. Its `shushaFooterDetails` area receives a regular all-page
+component with a literal GraphQL query for `publicMerchantProfile`. Only the
+whitelisted public fields from the private runtime profile are rendered; no
+merchant address, phone or email value belongs in source code. A missing profile
+keeps the SHUSHA brand and navigation without invented contact details.
+
+The CMS `about` and `contact` handles receive a supplementary contact sidebar.
+EverShop's CMS renderer and editor remain unchanged. The company typography and
+two-column layout are scoped to `main:has(.shusha-company-page)`; unrelated CMS
+pages keep their native layout. Browsers without `:has` retain a readable stacked
+page. On phones the sidebar is stacked and outbound contact links use 44px
+minimum targets. WhatsApp and Wise use the existing offline Iconify data; other
+contact symbols use the existing native Lucide dependency. There are no external
+font, icon or map embed requests.
+
+When upgrading, review the native Footer alias, route component scanner, Area
+query/props mapping, `currentCmsPage.urlKey`, and the `<main>`/`.cms-page` DOM.
+Focused synthetic SSR verifies those native contracts after compilation:
+
+```sh
+node --test tests/merchant-storefront.test.mjs
+```

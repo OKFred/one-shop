@@ -7,10 +7,11 @@ import sanitizeHtml from 'sanitize-html';
 import { buildContentPlan, createContentSync, sanitizeContentHtml, writeMerchantThemeConfig } from './sync-content.mjs';
 import { readVerifiedImage, validateCatalogSnapshot } from '../../extensions/shopify-bridge/src/services/catalog.js';
 import { loadPublishedCollectionSnapshot } from '../../extensions/shopify-bridge/src/services/worker.js';
+import { validatePublicMerchantProfile, loadPublicMerchantProfile } from '../merchant/public-profile.mjs';
 
 // Explicit public-page selection is separate from the supplier/catalog data.
 // No customer, order, receiving-account or unlisted CMS query is performed.
-export const PUBLIC_PAGE_HANDLES = Object.freeze(['about', 'about-us', 'how-to-order', 'shipping', 'shipping-policy', 'returns', 'return-policy', 'contact', 'contact-us', 'faq']);
+export const PUBLIC_PAGE_HANDLES = Object.freeze(['about', 'about-us', 'how-to-order', 'shipping', 'shipping-payment', 'shipping-policy', 'returns', 'return-policy', 'contact', 'contact-us', 'faq']);
 export const PREPARATION_READ = Object.freeze({
   shop: 'query ShushaPreparationShop { shop { myshopifyDomain } }',
   media: 'query ShushaPreparationMedia($id:ID!) { node(id:$id) { ... on MediaImage { id fileStatus status image { url } } } }'
@@ -85,12 +86,13 @@ export function normalizePublicContent(value = '') {
 }
 
 export function validatePreparationInput(input = { schemaVersion: 1, approvedPageHandles: [] }) {
-  onlyKeys(input, ['schemaVersion', 'approvedPageHandles', 'hero', 'footer', 'support', 'legacyRedirects'], 'Preparation input');
+  onlyKeys(input, ['schemaVersion', 'approvedPageHandles', 'hero', 'footer', 'support', 'publicProfile', 'legacyRedirects'], 'Preparation input');
   requireValue(input.schemaVersion === 1 && Array.isArray(input.approvedPageHandles) && input.approvedPageHandles.length <= PUBLIC_PAGE_HANDLES.length && new Set(input.approvedPageHandles).size === input.approvedPageHandles.length && input.approvedPageHandles.every(handle => PUBLIC_PAGE_HANDLES.includes(handle)), 'Explicit public CMS allowlist is invalid');
   const hero = input.hero || {}; const footer = input.footer || {}; const support = input.support || {};
   onlyKeys(hero, ['eyebrow', 'heading', 'descriptionHtml', 'imageSource', 'primaryLabel', 'primaryLink', 'secondaryLabel', 'secondaryLink', 'noteLeft', 'noteRight'], 'Hero');
   onlyKeys(footer, ['descriptionHtml'], 'Footer'); onlyKeys(support, ['whatsappSriLanka', 'whatsappChina'], 'Support');
   const merchant = { hero: {}, footer: {}, support: {} };
+  if (input.publicProfile != null) merchant.publicProfile = validatePublicMerchantProfile(input.publicProfile);
   for (const [key, value] of Object.entries(hero)) {
     if (key === 'imageSource') continue;
     if (key === 'descriptionHtml') merchant.hero[key] = normalizePublicContent(value);
@@ -101,7 +103,8 @@ export function validatePreparationInput(input = { schemaVersion: 1, approvedPag
   }
   if (footer.descriptionHtml != null) merchant.footer.descriptionHtml = normalizePublicContent(footer.descriptionHtml);
   for (const [key, value] of Object.entries(support)) {
-    requireValue(typeof value === 'string' && (!value || /^https:\/\/wa\.me\/\d{7,15}$/.test(value)), 'Support must contain reviewed public WhatsApp links'); merchant.support[key] = value;
+    requireValue(typeof value === 'string' && (!value || /^https:\/\/wa\.me\/\d{7,15}$/.test(value)), 'Support must contain reviewed public WhatsApp links');
+    requireValue(!merchant.publicProfile || value === merchant.publicProfile.support[key], 'Support links must match the shared public company profile'); merchant.support[key] = value;
   }
   if (hero.imageSource != null) {
     onlyKeys(hero.imageSource, ['sourceUuid', 'sha256'], 'Hero original-image selection');
@@ -118,7 +121,8 @@ async function loadPublicPages(pool, handles) {
     JOIN cms_page_description d ON d.cms_page_description_cms_page_id=p.cms_page_id
     WHERE p.status=TRUE AND d.url_key=ANY($1::text[]) ORDER BY d.url_key LIMIT 11`, [handles])).rows;
   requireValue(rows.length === handles.length && new Set(rows.map(row => row.url_key)).size === rows.length && rows.every(row => handles.includes(row.url_key) && uuid.test(row.uuid)), 'Every selected public page must be active and uniquely identified');
-  return rows.map(row => ({ sourceUuid: row.uuid, handle: row.url_key, title: boundedText(row.name, 'public page title', 200), bodyHtml: normalizePublicContent(row.content) }));
+  return rows.map(row => ({ sourceUuid: row.uuid, handle: row.url_key, title: boundedText(row.name, 'public page title', 200), bodyHtml: normalizePublicContent(row.content),
+    ...(['about', 'contact'].includes(row.url_key) ? { templateSuffix: row.url_key } : {}) }));
 }
 
 export async function verifyHeroOriginal({ runtime, selection, catalog, mediaRoot }) {
@@ -147,10 +151,11 @@ export async function verifyHeroOriginal({ runtime, selection, catalog, mediaRoo
 }
 
 export async function buildStorePreparation({ runtime, env = process.env, input, catalog = null, mediaRoot,
-  snapshotProvider = loadPublishedCollectionSnapshot, now = () => new Date() }) {
+  snapshotProvider = loadPublishedCollectionSnapshot, profileProvider = loadPublicMerchantProfile, now = () => new Date() }) {
   requireValue(/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(runtime.config.shop || ''), 'A configured Shopify shop is required');
   requireValue((await runtime.client.request(PREPARATION_READ.shop, {})).shop?.myshopifyDomain === runtime.config.shop, 'Shopify store identity differs');
   const normalized = validatePreparationInput(input);
+  if (normalized.merchant.publicProfile) requireValue(preparationDigest(await profileProvider({ env })) === preparationDigest(normalized.merchant.publicProfile), 'Current shared public company profile changed; prepare and review again');
   const source = await snapshotProvider(runtime, env);
   requireValue(Array.isArray(source.collections) && source.collections.length === 3 && new Set(source.collections.map(row => row.handle)).size === 3 && source.collections.every(row => categories.includes(row.handle) && uuid.test(row.sourceUuid)), 'Current native category UUIDs must be preserved');
   requireValue(!source.pages?.length && !source.menus?.length && !source.redirects?.length && Array.isArray(source.products) && source.products.length <= 500, 'Published snapshot exceeded its native catalog boundary');

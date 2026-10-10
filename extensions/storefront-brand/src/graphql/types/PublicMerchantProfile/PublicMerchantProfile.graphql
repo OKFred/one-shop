@@ -1,0 +1,25 @@
+type PublicMerchantAddress {
+  line1: String
+  line2: String
+  city: String
+  postalCode: String
+  country: String
+  countryCode: String
+}
+
+type PublicMerchantSupport {
+  email: String
+  whatsappSriLanka: String
+  whatsappChina: String
+}
+
+type PublicMerchantProfile {
+  shopName: String!
+  legalName: String
+  address: PublicMerchantAddress!
+  support: PublicMerchantSupport!
+}
+
+extend type Query {
+  publicMerchantProfile: PublicMerchantProfile!
+}

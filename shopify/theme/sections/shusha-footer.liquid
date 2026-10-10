@@ -1,20 +1,41 @@
 <footer class="shusha-footer page-width">
   <div class="shusha-footer__grid">
-    <div><strong>SHUSHA</strong><div class="rte">{{ section.settings.description }}</div></div>
-    <nav aria-label="Customer information">
-      {% for link in section.settings.menu.links %}<a class="link" href="{{ link.url }}">{{ link.title | escape }}</a>{% endfor %}
-    </nav>
+    <div>
+      <strong class="shusha-footer__brand">SHUSHA</strong>
+      <div class="shusha-footer__description rte">{{ section.settings.description }}</div>
+      {% if settings.shusha_business_name != blank or settings.shusha_business_address_line1 != blank %}
+        <div class="shusha-footer__company">
+          {% if settings.shusha_business_name != blank %}<p>{{ settings.shusha_business_name | escape }}</p>{% endif %}
+          {% render 'shusha-company-address' %}
+        </div>
+      {% endif %}
+    </div>
+    <div>
+      <p class="shusha-footer__heading">Good to know</p>
+      <nav aria-label="Customer information">
+        {% for link in section.settings.menu.links %}<a class="link" href="{{ link.url | escape }}">{{ link.title | escape }}</a>{% endfor %}
+        {%- assign footer_menu_urls = section.settings.menu.links | map: 'url' | join: '|' | prepend: '|' | append: '|' -%}
+        {%- assign company_page_handles = 'about,contact,how-to-order' | split: ',' -%}
+        {% for company_page_handle in company_page_handles %}
+          {% assign company_page = pages[company_page_handle] %}
+          {% assign company_page_url_token = company_page.url | prepend: '|' | append: '|' %}
+          {% if company_page != blank %}{% unless footer_menu_urls contains company_page_url_token %}<a class="link" href="{{ company_page.url }}">{{ company_page.title | escape }}</a>{% endunless %}{% endif %}
+        {% endfor %}
+        {%- assign shipping_page = pages['shipping-payment'] | default: pages.shipping | default: pages['shipping-policy'] -%}
+        {%- assign shipping_page_url_token = shipping_page.url | prepend: '|' | append: '|' -%}
+        {% if shipping_page != blank %}{% unless footer_menu_urls contains shipping_page_url_token %}<a class="link" href="{{ shipping_page.url }}">{{ shipping_page.title | escape }}</a>{% endunless %}{% endif %}
+        {%- assign payment_page = pages.payment | default: pages['payment-methods'] -%}
+        {%- assign payment_page_url_token = payment_page.url | prepend: '|' | append: '|' -%}
+        {% if payment_page != blank and payment_page.url != shipping_page.url %}{% unless footer_menu_urls contains payment_page_url_token %}<a class="link" href="{{ payment_page.url }}">{{ payment_page.title | escape }}</a>{% endunless %}{% endif %}
+      </nav>
+    </div>
     <div class="shusha-footer__support">
-      {% if settings.shusha_whatsapp_sri_lanka != blank %}
-        <a class="shusha-brand-link link" href="{{ settings.shusha_whatsapp_sri_lanka }}" target="_blank" rel="noopener noreferrer">{% render 'shusha-brand-icon', brand: 'whatsapp' %}WhatsApp · Sri Lanka</a>
-      {% endif %}
-      {% if settings.shusha_whatsapp_china != blank %}
-        <a class="shusha-brand-link link" href="{{ settings.shusha_whatsapp_china }}" target="_blank" rel="noopener noreferrer">{% render 'shusha-brand-icon', brand: 'whatsapp' %}WhatsApp · China</a>
-      {% endif %}
+      <p class="shusha-footer__heading">Let’s talk</p>
+      {% render 'shusha-contact-actions', compact: true %}
       <span class="shusha-brand-link">{% render 'shusha-brand-icon', brand: 'wise' %}Wise / bank transfer after confirmation</span>
     </div>
   </div>
-  <p class="caption">&copy; {{ 'now' | date: '%Y' }} SHUSHA</p>
+  <p class="shusha-footer__bottom caption">&copy; {{ 'now' | date: '%Y' }} SHUSHA</p>
 </footer>
 {% schema %}
 {
