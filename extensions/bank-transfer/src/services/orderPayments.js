@@ -6,6 +6,7 @@ import { startTransaction } from '@evershop/postgres-query-builder';
 import * as validation from './paymentValidation.js';
 import { loadReceivingConfig } from './receivingConfig.js';
 import { isEnabled } from './settings.js';
+import { claimNativeReceipt } from './globalReceipt.js';
 
 function publicQuote(row) {
   if (!row) return null;
@@ -97,6 +98,7 @@ async function recordReceipt(uuid, payload) {
     if (quote.revision !== payload.quoteRevision) throw new Error('The payment quote changed; refresh and verify the current quote');
     if (quote.currency !== denomination || validation.money(String(quote.amount)) !== amount) throw new Error('Received amount and currency must exactly match the current quote');
     if (validation.usdMoney(quote.merchandise_usd) !== validation.usdMoney(order.grand_total)) throw new Error('The merchandise total changed; review and reconfirm the quote');
+    await claimNativeReceipt(client, { reference, orderUuid: order.uuid, currency: denomination, amount, quoteRevision: quote.revision });
     const priorReceipt = (await client.query('SELECT * FROM shusha_payment_receipt WHERE order_id=$1', [order.order_id])).rows[0];
     if (priorReceipt) {
       if (priorReceipt.receipt_reference === reference && priorReceipt.currency === denomination && validation.money(String(priorReceipt.amount)) === amount && quote.status === 'paid' && order.payment_status === 'paid') return { quote: publicQuote(quote), paymentUrl: customerUrl(uuid), alreadyRecorded: true };
