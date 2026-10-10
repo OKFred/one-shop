@@ -1,23 +1,32 @@
+{%- assign shusha_catalog_count = collections.all.all_products_count | default: 0 -%}
+{%- capture primary_url -%}{%- render 'shusha-link-url', url: section.settings.primary_link -%}{%- endcapture -%}
+{%- capture secondary_url -%}{%- render 'shusha-link-url', url: section.settings.secondary_link -%}{%- endcapture -%}
+{%- assign primary_url = primary_url | strip -%}
+{%- assign secondary_url = secondary_url | strip -%}
 <section class="shusha-hero page-width" aria-labelledby="ShushaHero-{{ section.id }}">
-  <div class="shusha-hero__inner">
+  <div class="shusha-hero__inner{% if section.settings.image == blank %} shusha-hero__inner--without-media{% endif %}">
     <div class="shusha-hero__copy">
       <p class="shusha-eyebrow">{{ section.settings.eyebrow | escape }}</p>
-      <h1 id="ShushaHero-{{ section.id }}">{{ section.settings.heading | escape }}</h1>
-      <div class="shusha-hero__description rte">{{ section.settings.description }}</div>
+      <h1 id="ShushaHero-{{ section.id }}">{% if shusha_catalog_count > 0 %}{{ section.settings.heading | escape }}{% else %}SHUSHA{% endif %}</h1>
+      <div class="shusha-hero__description rte">{% if shusha_catalog_count > 0 %}{{ section.settings.description }}{% else %}<p>Clothing from Sri Lanka, with personal support for worldwide order requests. Explore our current collection in the main store, or contact our team about a style.</p>{% endif %}</div>
       <div class="shusha-hero__actions">
-        <a class="shusha-primary" href="{{ section.settings.primary_link | default: routes.all_products_collection_url }}">{{ section.settings.primary_label | escape }}</a>
-        {% if section.settings.secondary_link != blank %}
-          <a class="shusha-secondary" href="{{ section.settings.secondary_link }}">{{ section.settings.secondary_label | escape }}</a>
+        {% if shusha_catalog_count > 0 and primary_url != blank %}
+          <a class="shusha-primary" href="{{ primary_url | escape }}">{{ section.settings.primary_label | escape }}</a>
+        {% else %}
+          <a class="shusha-primary" href="https://shop.this-time.com/">Shop our main store <span aria-hidden="true">↗</span></a>
+        {% endif %}
+        {% if shusha_catalog_count > 0 and secondary_url != blank %}
+          <a class="shusha-secondary" href="{{ secondary_url | escape }}">{{ section.settings.secondary_label | escape }}</a>
+        {% elsif pages.contact != blank %}
+          <a class="shusha-secondary" href="{{ pages.contact.url | escape }}">Contact our team</a>
         {% endif %}
       </div>
     </div>
-    <figure class="shusha-hero__media">
-      {% if section.settings.image != blank %}
+    {% if section.settings.image != blank %}
+      <figure class="shusha-hero__media">
         {{ section.settings.image | image_url: width: 1600 | image_tag: widths: '400, 750, 1100, 1600', sizes: '(min-width: 750px) 50vw, 100vw', fetchpriority: 'high' }}
-      {% else %}
-        {{ 'product-apparel-1' | placeholder_svg_tag: 'placeholder-svg' }}
-      {% endif %}
-    </figure>
+      </figure>
+    {% endif %}
   </div>
   <div class="shusha-note"><span>{{ section.settings.note_left | escape }}</span><span>{{ section.settings.note_right | escape }}</span></div>
 </section>

@@ -1,3 +1,4 @@
+{%- if section.settings.collection != blank and section.settings.collection.all_products_count > 0 and section.settings.collection.products.size > 0 -%}
 {{ 'component-card.css' | asset_url | stylesheet_tag }}
 {{ 'component-price.css' | asset_url | stylesheet_tag }}
 
@@ -215,6 +216,7 @@
   </div>
 </div>
 
+{%- endif -%}
 {% schema %}
 {
   "name": "t:sections.featured-collection.name",

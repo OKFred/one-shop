@@ -27,7 +27,11 @@
         </div>
       {% endif %}
       <div class="shusha-company__next">
-        <a class="shusha-primary" href="{{ routes.all_products_collection_url }}">Explore the collection <span aria-hidden="true">→</span></a>
+        {% if collections.all.all_products_count > 0 %}
+          <a class="shusha-primary" href="{{ routes.all_products_collection_url }}">Explore the collection <span aria-hidden="true">→</span></a>
+        {% else %}
+          <a class="shusha-primary" href="https://shop.this-time.com/">Shop our main store <span aria-hidden="true">↗</span></a>
+        {% endif %}
         {% if company_contact == false and pages.contact != blank %}<a class="shusha-secondary" href="{{ pages.contact.url }}">Contact SHUSHA</a>{% endif %}
         {% if company_contact and pages['how-to-order'] != blank %}<a class="shusha-secondary" href="{{ pages['how-to-order'].url }}">How to order</a>{% endif %}
       </div>

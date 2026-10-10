@@ -1,0 +1,5 @@
+{%- for candidate_link in links -%}
+  {%- capture candidate_url -%}{%- render 'shusha-link-url', link: candidate_link -%}{%- endcapture -%}
+  {%- assign candidate_url = candidate_url | strip -%}
+  {%- if candidate_url != blank -%}true{%- break -%}{%- endif -%}
+{%- endfor -%}

@@ -1,0 +1,64 @@
+{%- comment -%}
+  Resolve a configured URL or native menu link without advertising absent resources.
+  Native PAGE/COLLECTION links must retain their associated published resource.
+{%- endcomment -%}
+{%- liquid
+  assign candidate = url | default: link.url | strip
+  assign candidate_path = candidate | split: '?' | first | split: '#' | first
+  assign allowed = true
+  if link.type == 'page_link' or link.type == 'collection_link'
+    if link.object == blank
+      assign allowed = false
+    endif
+  endif
+  assign relative_prefix = candidate | slice: 0, 1
+  assign shopify_page_prefix = candidate | slice: 0, 16
+  assign shopify_collection_prefix = candidate | slice: 0, 22
+  assign resolve_page = false
+  assign resolve_collection = false
+  if relative_prefix == '/'
+    if candidate_path contains '/pages/'
+      assign resolve_page = true
+    elsif candidate_path contains '/collections/'
+      assign resolve_collection = true
+    endif
+  endif
+  if shopify_page_prefix == 'shopify://pages/'
+    assign resolve_page = true
+  elsif shopify_collection_prefix == 'shopify://collections/'
+    assign resolve_collection = true
+  endif
+  if link.type == 'product_link' and link.object != blank
+    assign resolve_collection = false
+  endif
+  if resolve_page
+    assign resource_handle = candidate_path | split: '/pages/' | last | split: '/' | first
+    if pages[resource_handle] == blank
+      assign allowed = false
+    elsif shopify_page_prefix == 'shopify://pages/'
+      assign candidate = pages[resource_handle].url
+    endif
+  elsif resolve_collection
+    assign resource_handle = candidate_path | split: '/collections/' | last | split: '/' | first
+    if collections[resource_handle] == blank
+      assign allowed = false
+    elsif shopify_collection_prefix == 'shopify://collections/'
+      assign candidate = collections[resource_handle].url
+    endif
+  endif
+  assign leading_character = candidate | slice: 0, 1
+  assign leading_pair = candidate | slice: 0, 2
+  assign https_prefix = candidate | slice: 0, 8
+  assign http_prefix = candidate | slice: 0, 7
+  assign mail_prefix = candidate | slice: 0, 7
+  assign phone_prefix = candidate | slice: 0, 4
+  unless leading_character == '/' or https_prefix == 'https://' or http_prefix == 'http://' or mail_prefix == 'mailto:' or phone_prefix == 'tel:'
+    assign allowed = false
+  endunless
+  if leading_pair == '//'
+    assign allowed = false
+  endif
+  if allowed and candidate != blank
+    echo candidate
+  endif
+-%}

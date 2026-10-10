@@ -13,8 +13,15 @@
     <div>
       <p class="shusha-footer__heading">Good to know</p>
       <nav aria-label="Customer information">
-        {% for link in section.settings.menu.links %}<a class="link" href="{{ link.url | escape }}">{{ link.title | escape }}</a>{% endfor %}
-        {%- assign footer_menu_urls = section.settings.menu.links | map: 'url' | join: '|' | prepend: '|' | append: '|' -%}
+        {%- assign footer_menu_urls = '|' -%}
+        {% for link in section.settings.menu.links %}
+          {%- capture footer_link_url -%}{%- render 'shusha-link-url', link: link -%}{%- endcapture -%}
+          {%- assign footer_link_url = footer_link_url | strip -%}
+          {% if footer_link_url != blank %}
+            <a class="link" href="{{ footer_link_url | escape }}">{{ link.title | escape }}</a>
+            {%- assign footer_menu_urls = footer_menu_urls | append: footer_link_url | append: '|' -%}
+          {% endif %}
+        {% endfor %}
         {%- assign company_page_handles = 'about,contact,how-to-order' | split: ',' -%}
         {% for company_page_handle in company_page_handles %}
           {% assign company_page = pages[company_page_handle] %}
