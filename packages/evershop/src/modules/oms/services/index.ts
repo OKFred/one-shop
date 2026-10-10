@@ -1,5 +1,8 @@
 import addOrderActivityLog from './addOrderActivityLog.js';
 import cancelOrder from './cancelOrder.js';
+// SHUSHA bridge: observe native cancel/restock in its existing transaction.
+// Compatibility contract: docs/shopify-inventory-compatibility.md.
+export { hookBeforeUpdatePaymentStatusToCancel, hookAfterReStockAfterCancel } from './cancelOrder.js';
 import createShipment from './createShipment.js';
 import markDelivered from './markDelivered.js';
 export * from './orderMetafield.js';

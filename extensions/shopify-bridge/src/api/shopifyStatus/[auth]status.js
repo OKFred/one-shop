@@ -1,5 +1,5 @@
 import { pool } from '@evershop/evershop/lib/postgres';
-export default async (request,response) => {
+export default async (request,response,next) => {
   response.set('Cache-Control','no-store');
   try {
     const connected = (await pool.query('SELECT count(*)::int AS n FROM shusha_bridge_token')).rows[0].n > 0;

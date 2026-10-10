@@ -1,4 +1,4 @@
 {
-  "shopifyBridge": {"jobsEnabled": false, "sharedCapacityEnabled": false},
-  "extensionToAppend": {"name":"shopify-bridge","resolve":"extensions/shopify-bridge","enabled":true,"priority":130}
+  "extensionToAppend": { "name": "shopify-bridge", "resolve": "extensions/shopify-bridge", "enabled": true, "priority": 130 },
+  "note": "Append this extension to the current system.extensions array. Worker and write gates are backend environment flags in shopify.env.example; never replace the production configuration with this example."
 }
