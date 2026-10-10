@@ -1,0 +1,27 @@
+# Copy to a private app project as shopify.extension.toml. Shopify CLI must
+# generate/register that app's UID; never reuse a different app's identity.
+api_version = "2026-07"
+
+[[extensions]]
+name = "SHUSHA payment details"
+handle = "shusha-wise-payment"
+type = "ui_extension"
+# uid is added by Shopify CLI during registration, before app preview/deploy.
+
+[[extensions.targeting]]
+module = "./src/order-status.jsx"
+target = "customer-account.order-status.block.render"
+
+[[extensions.targeting]]
+module = "./src/order-menu.jsx"
+target = "customer-account.order.action.menu-item.render"
+
+[extensions.capabilities]
+network_access = true
+
+[extensions.settings]
+[[extensions.settings.fields]]
+key = "backend_origin"
+type = "single_line_text_field"
+name = "Verified SHUSHA application origin"
+description = "The HTTPS application origin registered for this store. Leave empty until the private backend is ready."

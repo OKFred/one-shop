@@ -160,7 +160,11 @@ test('actual native status and OAuth wrappers stop before eNext and bind uninsta
   };
   try {
     const status = await fetchRoute('status'); assert.equal(status.status, 200); assert.match(status.headers.get('cache-control'), /no-store/);
-    assert.deepEqual(await status.json(), { data: { enabled: process.env.SHOPIFY_BRIDGE_ENABLED === 'true', writesEnabled: process.env.SHOPIFY_BRIDGE_WRITES_ENABLED === 'true', connected: true, mappedStyles: 3 } });
+    const enabled = process.env.SHOPIFY_BRIDGE_ENABLED === 'true';
+    const writesEnabled = enabled && process.env.SHOPIFY_BRIDGE_WRITES_ENABLED === 'true';
+    const paymentWritesEnabled = writesEnabled && process.env.SHOPIFY_PAYMENT_OPERATIONS_ENABLED === 'true';
+    const orderWritesEnabled = paymentWritesEnabled && process.env.SHOPIFY_SHARED_CAPACITY_ENABLED === 'true' && process.env.SHOPIFY_ORDER_OPERATIONS_ENABLED === 'true';
+    assert.deepEqual(await status.json(), { data: { enabled, writesEnabled, paymentWritesEnabled, orderWritesEnabled, connected: true, mappedStyles: 3 } });
     failPool = true; const unavailable = await fetchRoute('status'); assert.equal(unavailable.status, 503); assert.deepEqual(await unavailable.json(), { error: 'SHOPIFY_BRIDGE_NOT_MIGRATED' }); failPool = false;
     const start = await fetchRoute('start'); assert.equal(start.status, 302); assert.match(start.headers.get('cache-control'), /no-store/);
     const authorization = new URL(start.headers.get('location')); assert.equal(authorization.host, shop); assert.equal(authorization.searchParams.get('redirect_uri'), config.redirectUri); assert.ok(authorization.searchParams.get('state'));

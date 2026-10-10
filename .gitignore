@@ -86,6 +86,10 @@ media/
 !/docs/shusha-material-operations.md
 !/docs/shopify-inventory-compatibility.md
 !/docs/shopify-payment-compatibility.md
+!/docs/shopify-cancellation-compatibility.md
+!/shopify/extensions/
+!/shopify/extensions/wise-payment/
+!/shopify/extensions/wise-payment/**
 **/*.private.json
 **/*.private.html
 **/*.private.js

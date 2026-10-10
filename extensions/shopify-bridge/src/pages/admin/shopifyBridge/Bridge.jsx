@@ -1,4 +1,5 @@
 import React,{useEffect,useState} from 'react';
+import ShopifyOrderOperations from './ShopifyOrderOperations.jsx';
 export default function Bridge() {
   const [status,setStatus]=useState(null),[platform,setPlatform]=useState('all'),[orders,setOrders]=useState([]),[shop,setShop]=useState(null),[error,setError]=useState(''),[selected,setSelected]=useState(null);
   useEffect(()=>{fetch('/api/shopify/status',{credentials:'same-origin'}).then(r=>r.json()).then(r=>setStatus(r.data||{error:r.error})).catch(()=>setStatus({error:true}));},[]);
@@ -13,7 +14,7 @@ export default function Bridge() {
     <label>Platform <select value={platform} onChange={event=>setPlatform(event.target.value)}><option value="all">Both stores</option><option value="evershop">EverShop</option><option value="shopify">Shopify</option></select></label>
     {error&&<p role="alert">{error}</p>}
     <table className="w-full mt-4"><thead><tr><th>Platform</th><th>Order</th><th>Total</th><th>Payment</th><th>Shipment</th><th>Open</th></tr></thead><tbody>{orders.map(order=><tr key={`${order.platform}:${order.order_id}`}><td>{order.platform==='shopify'?'Shopify':'EverShop'}</td><td>{order.number}</td><td>{order.currency} {order.total}</td><td>{order.payment_status}</td><td>{order.fulfillment_status}</td><td>{order.platform==='evershop'?<a href={`/admin/order/edit/${order.native_uuid}`}>Native order</a>:<><button type="button" onClick={()=>selectOrder(order)}>Operations</button>{shop&&<a href={`https://admin.shopify.com/store/${shop.replace('.myshopify.com','')}/orders/${order.order_id.split('/').pop()}`} target="_blank" rel="noopener noreferrer">Native order</a>}</>}</td></tr>)}</tbody></table>
-    {selected&&<div className="mt-6"><h2>Shopify {selected.native.number}</h2><p>Preferred courier: {selected.native.private_snapshot?.preferredCourier || 'No preference'}</p><ul>{selected.lines.map(line=><li key={line.id}>{line.sku} × {line.quantity}</li>)}</ul><p>Shipping and incoming funds require independent merchant confirmation.</p></div>}
+    {selected&&<div className="mt-6"><h2>Shopify {selected.native.number}</h2><p>Preferred courier: {selected.native.private_snapshot?.preferredCourier || 'No preference'}</p><ul>{selected.lines.map(line=><li key={line.id}>{line.sku} × {line.quantity}</li>)}</ul><ShopifyOrderOperations key={selected.native.order_id} orderId={selected.native.order_id} writesEnabled={status?.paymentWritesEnabled===true} orderWritesEnabled={status?.orderWritesEnabled===true} onChanged={()=>selectOrder({platform:'shopify',order_id:selected.native.order_id})} /></div>}
   </div>;
 }
 export const layout={areaId:'content',sortOrder:10};

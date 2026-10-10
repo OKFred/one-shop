@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "approvedPageHandles": [],
+  "hero": {
+    "eyebrow": "",
+    "heading": "",
+    "descriptionHtml": "",
+    "primaryLabel": "",
+    "primaryLink": "",
+    "secondaryLabel": "",
+    "secondaryLink": "",
+    "noteLeft": "",
+    "noteRight": ""
+  },
+  "footer": { "descriptionHtml": "" },
+  "support": { "whatsappSriLanka": "", "whatsappChina": "" },
+  "legacyRedirects": []
+}

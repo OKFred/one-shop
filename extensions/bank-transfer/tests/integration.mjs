@@ -38,6 +38,7 @@ const { default: resolvers } = await import('../dist/graphql/types/OrderPayment/
 const { default: migrate } = await import('../dist/migration/Version-1.0.0.js');
 const { default: migrateShipping } = await import('../dist/migration/Version-1.0.1.js');
 const { default: migratePreference } = await import('../dist/migration/Version-1.0.2.js');
+const { default: migrateGlobalReceipts } = await import('../dist/migration/Version-1.0.3.js');
 const { saveCheckoutShippingPreference } = await import('../dist/services/shippingPreference.js');
 const { createShippingPreferenceAccessMiddleware } = await import('../dist/services/shippingPreferenceAccess.js');
 const { getConfig } = await import('@evershop/evershop/lib/util/getConfig');
@@ -83,6 +84,7 @@ try {
   await migrate(pool); await migrate(pool);
   await migrateShipping(pool); await migrateShipping(pool);
   await migratePreference(pool); await migratePreference(pool);
+  await migrateGlobalReceipts(pool); await migrateGlobalReceipts(pool);
   const zone = (await pool.query('SELECT z.shipping_zone_id,p.is_enabled FROM shipping_zone z JOIN shipping_zone_provider p ON p.zone_id=z.shipping_zone_id WHERE z.uuid=$1 AND p.provider_code=$2', ['ed8f7156-3636-4d8b-8e64-0e894795d7f6', 'shusha'])).rows[0];
   assert.equal(zone.is_enabled, true); checks++;
   assert.equal(Number((await pool.query('SELECT count(*) AS count FROM shipping_zone_country WHERE zone_id=$1', [zone.shipping_zone_id])).rows[0].count), countries.length); checks++;
@@ -145,13 +147,15 @@ try {
   assert.equal((await recordReceipt(first.uuid, receipt)).alreadyRecorded, true); checks++;
   assert.equal(Number((await pool.query('SELECT count(*) AS count FROM payment_transaction WHERE payment_transaction_order_id=$1', [first.order_id])).rows[0].count), 1); checks++;
   await confirmQuote(second.uuid, { currency: 'EUR', amount: '13.00', shippingDeferred: true, expectedQuoteRevision: 0 });
-  await assert.rejects(() => recordReceipt(second.uuid, { ...receipt, quoteRevision: 1 }), /already been registered/); checks++;
+  await assert.rejects(() => recordReceipt(second.uuid, { ...receipt, quoteRevision: 1 }), /already.*registered/); checks++;
   assert.equal(Number((await pool.query('SELECT count(*) AS count FROM shusha_payment_receipt WHERE order_id=$1', [second.order_id])).rows[0].count), 0); checks++;
   await pool.query(`CREATE FUNCTION shusha_bank_test_reject() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.payment_transaction_order_id=${Number(second.order_id)} THEN RAISE EXCEPTION 'isolated payment rollback'; END IF; RETURN NEW; END $$`);
   await pool.query('CREATE TRIGGER shusha_bank_test_reject BEFORE INSERT ON payment_transaction FOR EACH ROW EXECUTE FUNCTION shusha_bank_test_reject()');
-  try { await assert.rejects(() => recordReceipt(second.uuid, { ...receipt, quoteRevision: 1, receiptReference: `ROLLBACK-${crypto.randomUUID()}` }), /isolated payment rollback/); checks++; }
+  const rollbackReference = `ROLLBACK-${crypto.randomUUID()}`.toUpperCase();
+  try { await assert.rejects(() => recordReceipt(second.uuid, { ...receipt, quoteRevision: 1, receiptReference: rollbackReference }), /isolated payment rollback/); checks++; }
   finally { await pool.query('DROP TRIGGER shusha_bank_test_reject ON payment_transaction'); await pool.query('DROP FUNCTION shusha_bank_test_reject()'); }
   assert.equal((await getOrderQuote(second.order_id)).status, 'confirmed'); assert.equal(Number((await pool.query('SELECT count(*) AS count FROM shusha_payment_receipt WHERE order_id=$1', [second.order_id])).rows[0].count), 0); checks += 2;
+  assert.equal(Number((await pool.query('SELECT count(*) AS count FROM shusha_payment_receipt_registry WHERE reference=$1', [rollbackReference])).rows[0].count), 0, 'Failed native payment must roll back its global receipt claim'); checks++;
   await pool.query("UPDATE \"order\" SET status='canceled' WHERE order_id=$1", [third.order_id]);
   await assert.rejects(() => confirmQuote(third.uuid, { currency: 'GBP', amount: '15.00', shippingDeferred: true, expectedQuoteRevision: 0 }), /cannot receive/); checks++;
   await pool.query("UPDATE \"order\" SET status='canceled' WHERE order_id=$1", [second.order_id]);
@@ -290,6 +294,7 @@ try {
 } finally {
   const ids = created.map((o) => o.order_id);
   if (ids.length) {
+    await pool.query("DELETE FROM shusha_payment_receipt_registry WHERE platform='evershop' AND order_key=ANY($1::text[])", [created.map(order => `evershop:${order.uuid}`)]);
     await pool.query("DELETE FROM event WHERE data::jsonb->>'orderId'=ANY($1::text[]) OR data::jsonb->>'order_id'=ANY($1::text[]) OR data::jsonb->'old'->>'order_id'=ANY($1::text[]) OR data::jsonb->'new'->>'order_id'=ANY($1::text[])", [ids.map(String)]);
     await pool.query('DELETE FROM "order" WHERE order_id=ANY($1::int[])', [ids]);
   }
