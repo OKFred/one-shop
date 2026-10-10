@@ -2,11 +2,12 @@ import { createHash } from 'node:crypto';
 import { cp, readFile, writeFile, realpath, lstat } from 'node:fs/promises';
 import path from 'node:path';
 import sanitizeHtml from 'sanitize-html';
+import { shopifyPublicProfileSettings } from '../merchant/public-profile.mjs';
 
 // The caller supplies the authenticated 2026-10 client and private durable store.
 // Importing this module never reads credentials or contacts Shopify.
 const ownerField = 'owner: metafield(namespace: "shusha_bridge", key: "source_key") { value }';
-const pageFields = `id handle title body isPublished ${ownerField}`;
+const pageFields = `id handle title body isPublished templateSuffix ${ownerField}`;
 const collectionFields = `id handle title descriptionHtml sortOrder ${ownerField} sources { __typename id title }`;
 const menuFields = 'id handle title items { id title type url resourceId items { id title type url resourceId items { id title type url resourceId } } }';
 export const CONTENT_GRAPHQL = Object.freeze({
@@ -76,7 +77,11 @@ export function buildContentPlan(snapshot, { publishPages = false } = {}) {
     return [p.sourceUuid, { ...p, handle: p.handle.toLowerCase() }];
   }));
   ensureUnique([...byProduct.values()], p => p.handle);
-  const pages = (snapshot.pages || []).map(p => ({ sourceKey: `page:${text(p.sourceUuid, 'page identity')}`, handle: handle(p.handle), title: text(p.title, 'page title'), body: sanitizeContentHtml(p.bodyHtml), isPublished: publishPages === true }));
+  const pages = (snapshot.pages || []).map(p => {
+    if (p.templateSuffix != null && !['', 'about', 'contact'].includes(p.templateSuffix)) throw new Error('Unreviewed public page template');
+    return { sourceKey: `page:${text(p.sourceUuid, 'page identity')}`, handle: handle(p.handle), title: text(p.title, 'page title'), body: sanitizeContentHtml(p.bodyHtml), isPublished: publishPages === true,
+      ...(p.templateSuffix != null ? { templateSuffix: p.templateSuffix } : {}) };
+  });
   const collections = (snapshot.collections || []).map(c => {
     const products = (c.productUuids || []).map(uuid => byProduct.get(uuid)).filter(Boolean).sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt) || a.handle.localeCompare(b.handle));
     ensureUnique(products, p => p.shopifyGid);
@@ -180,8 +185,9 @@ export function createContentSync({ graphql, stateStore, waitForJob } = {}) {
           const matches = (await connection('pages', { query: `handle:${desired.handle}` }, d => d.pages)).filter(p => p.handle === desired.handle);
           if (matches.length > 1) throw new Error('Ambiguous page handle');
           let remote = matches[0]; const previous = await stateStore.get(desired.sourceKey); assertOwner(remote, desired, previous);
-          const input = { handle: desired.handle, title: desired.title, body: desired.body, isPublished: desired.isPublished, metafields: owner(desired.sourceKey) };
-          const equal = remote && ['handle', 'title', 'body', 'isPublished'].every(key => remote[key] === input[key]);
+          const input = { handle: desired.handle, title: desired.title, body: desired.body, isPublished: desired.isPublished, metafields: owner(desired.sourceKey),
+            ...(desired.templateSuffix != null ? { templateSuffix: desired.templateSuffix } : {}) };
+          const equal = remote && ['handle', 'title', 'body', 'isPublished', ...(desired.templateSuffix != null ? ['templateSuffix'] : [])].every(key => remote[key] === input[key]);
           if (equal) report.unchanged++;
           else { report.pages++; if (!dryRun) remote = (await mutation(remote ? 'pageUpdate' : 'pageCreate', remote ? { id: remote.id, page: input } : { page: input }, remote ? 'pageUpdate' : 'pageCreate')).page; }
           if (!dryRun && remote) { assertOwner(remote, desired); await stateStore.put(desired.sourceKey, { id: remote.id, handle: desired.handle, digest: hash(input) }); }
@@ -253,6 +259,14 @@ export function createContentSync({ graphql, stateStore, waitForJob } = {}) {
 // Generate a private copy of the checked-in theme. Merchant content must never
 // be written into the vendored directory or a public path.
 export async function writeMerchantThemeConfig({ themePath, outputPath, merchant }) {
+  const profileSettings = merchant.publicProfile ? shopifyPublicProfileSettings(merchant.publicProfile) : null;
+  const supportSettings = {};
+  for (const [input, output] of [['whatsappSriLanka', 'shusha_whatsapp_sri_lanka'], ['whatsappChina', 'shusha_whatsapp_china']]) {
+    const value = merchant.support?.[input];
+    if (value != null && (typeof value !== 'string' || value && !/^https:\/\/wa\.me\/[1-9]\d{6,14}$/.test(value))) throw new Error('Only a verified WhatsApp support link is allowed');
+    if (profileSettings && value != null && value !== profileSettings[output]) throw new Error('Support links must match the shared public company profile');
+    if (value != null) supportSettings[output] = value;
+  }
   const source = await realpath(themePath);
   const destination = path.resolve(outputPath);
   if (destination === source || destination.startsWith(source + path.sep) || !destination.split(path.sep).some(part => ['private', 'private-data'].includes(part))) throw new Error('Theme output must be a separate private directory');
@@ -276,8 +290,9 @@ export async function writeMerchantThemeConfig({ themePath, outputPath, merchant
   if (merchant.footer?.descriptionHtml) footer.sections.footer.settings.description = sanitizeContentHtml(merchant.footer.descriptionHtml);
   await write('sections/footer-group.json', footer);
   const settings = await read('config/settings_data.json');
+  if (profileSettings) Object.assign(settings.current, profileSettings);
   for (const [input, output] of [['whatsappSriLanka', 'shusha_whatsapp_sri_lanka'], ['whatsappChina', 'shusha_whatsapp_china']]) {
-    const value = merchant.support?.[input] || '';
+    const value = supportSettings[output] ?? settings.current[output] ?? '';
     if (value && !/^https:\/\/wa\.me\/\d{7,15}$/.test(value)) throw new Error('Only a verified WhatsApp support link is allowed');
     settings.current[output] = value;
   }

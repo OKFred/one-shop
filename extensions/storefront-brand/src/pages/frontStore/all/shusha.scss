@@ -66,3 +66,73 @@ body { background: #faf8f4; color: #272b24; }
     .content > .pt-12 h3 { font-size: 28px; margin-bottom: 25px; }
   }
   @media (prefers-reduced-motion: reduce) { .shusha-category img { transition: none; } }
+
+/* Merchant contact information comes only from the public runtime profile. */
+.shusha-footer { margin-top: 80px; padding: 52px 0 24px; border-top: 1px solid #303e2c; background: #303e2c; color: #faf8f4; }
+.shusha-footer-details { display: grid; grid-template-columns: 1.15fr .65fr .9fr 1.35fr; gap: 36px; }
+.shusha-footer-wordmark { display: inline-block; font-size: 26px; line-height: 1.2; font-weight: 600; letter-spacing: 4px; color: #faf8f4; text-decoration: none; }
+.shusha-footer-brand > p { max-width: 260px; margin: 20px 0 0; font-size: 13px; line-height: 1.8; color: #d2d8c9; }
+.shusha-footer-brand .shusha-footer-payment { display: flex; align-items: center; gap: 10px; margin-top: 24px; font-size: 12px; line-height: 1.6; }
+.shusha-footer-nav { display: flex; flex-direction: column; align-items: flex-start; }
+.shusha-footer-nav h2, .shusha-contact-card--compact .shusha-contact-card-heading { margin: 0 0 15px; font-family: Arial, Helvetica, sans-serif; font-size: 11px; line-height: 1.5; font-weight: 600; letter-spacing: 1.8px; text-transform: uppercase; color: #d2d8c9; }
+.shusha-footer-nav a { display: inline-flex; align-items: center; min-height: 36px; font-size: 13px; line-height: 1.5; color: #faf8f4; text-decoration: none; }
+.shusha-footer a:hover { color: #fff; text-decoration: underline; text-underline-offset: 4px; }
+.shusha-footer a:focus-visible { outline-color: #e5eacb; }
+.shusha-footer-copyright { margin-top: 36px; padding-top: 20px; border-top: 1px solid #63705b; color: #d2d8c9; font-size: 11px; line-height: 1.6; }
+.shusha-contact-card { padding: 28px; background: #eeede5; border: 1px solid #e2e1d5; color: #30382b; }
+.shusha-contact-card-heading { margin: 0 0 24px; font-family: Georgia, 'Times New Roman', serif; font-size: 26px; line-height: 1.25; font-weight: 400; }
+.shusha-contact-company { margin: 0 0 20px; font-size: 14px; line-height: 1.6; font-weight: 600; overflow-wrap: anywhere; }
+.shusha-contact-address { display: flex; align-items: flex-start; gap: 12px; }
+.shusha-contact-address > svg { flex-shrink: 0; margin-top: 1px; }
+.shusha-contact-label { display: block; font-size: 10px; line-height: 1.5; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: #65705b; }
+.shusha-contact-address address { margin-top: 8px; font-size: 14px; line-height: 1.8; font-style: normal; overflow-wrap: anywhere; }
+.shusha-contact-address address span { display: block; }
+.shusha-map-link { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin-top: 6px; color: #303e2c; font-size: 12px; text-underline-offset: 4px; }
+.shusha-contact-links { display: grid; gap: 4px; margin-top: 20px; }
+.shusha-contact-links > a { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 13px; line-height: 1.5; color: inherit; text-decoration: none; }
+.shusha-contact-links > a:hover { text-decoration: underline; text-underline-offset: 4px; }
+.shusha-contact-links > a > svg { flex-shrink: 0; }
+.shusha-contact-links > a > span { min-width: 0; overflow-wrap: anywhere; }
+.shusha-contact-arrow { margin-left: auto; }
+.shusha-contact-card--compact { padding: 0; border: 0; background: transparent; color: #faf8f4; }
+.shusha-contact-card--compact .shusha-contact-company { font-size: 12px; color: #d2d8c9; }
+.shusha-contact-card--compact .shusha-contact-label { color: #d2d8c9; }
+.shusha-contact-card--compact .shusha-contact-address address { font-size: 13px; }
+.shusha-contact-card--compact .shusha-contact-links { margin-top: 12px; }
+
+/* Only the about/contact route component creates this marker. Other CMS
+   pages retain EverShop's native layout and typography. */
+main:has(.shusha-company-page) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, .55fr); column-gap: 64px; padding-bottom: 24px; }
+main:has(.shusha-company-page) > * { grid-column: 1 / -1; }
+main:has(.shusha-company-page) .cms-page { grid-column: 1; width: 100%; max-width: none; padding-top: 24px; padding-bottom: 40px; margin: 0; }
+main:has(.shusha-company-page) .cms__page__heading { margin: 0 0 32px; font-family: Georgia, 'Times New Roman', serif; font-size: clamp(38px, 4.2vw, 58px); line-height: 1.1; font-weight: 400; letter-spacing: -1.5px; color: #303e2c; }
+main:has(.shusha-company-page) .cms-page .prose { color: #62655b; font-size: 15px; line-height: 1.9; }
+main:has(.shusha-company-page) .cms-page .prose > p:first-child { color: #3e4737; font-size: 18px; line-height: 1.8; }
+main:has(.shusha-company-page) .cms-page .prose h2, main:has(.shusha-company-page) .cms-page .prose h3 { font-family: Georgia, 'Times New Roman', serif; font-weight: 400; color: #303e2c; }
+main:has(.shusha-company-page) .cms-page .prose h2 { font-size: 29px; }
+main:has(.shusha-company-page) .cms-page .prose h3 { font-size: 23px; }
+main:has(.shusha-company-page) .cms-page .prose a { color: #303e2c; text-underline-offset: 4px; }
+main:has(.shusha-company-page) .shusha-company-page { grid-column: 2; min-width: 0; padding-top: 24px; }
+.shusha-company-sidebar { position: sticky; top: 24px; }
+.shusha-company-help { padding: 24px 4px 0; }
+.shusha-company-help p { margin: 12px 0 10px; color: #62655b; font-size: 13px; line-height: 1.8; }
+.shusha-company-help a { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; color: #303e2c; font-size: 13px; text-decoration: underline; text-underline-offset: 4px; }
+@media (max-width: 1023px) {
+  .shusha-footer-details { grid-template-columns: 1fr 1fr; gap: 36px 40px; }
+  main:has(.shusha-company-page) { column-gap: 32px; grid-template-columns: minmax(0, 1fr) minmax(260px, .65fr); }
+}
+@media (max-width: 767px) {
+  .shusha-footer { margin-top: 48px; padding-top: 36px; }
+  .shusha-footer-details { grid-template-columns: 1fr 1fr; gap: 28px 24px; }
+  .shusha-footer-brand, .shusha-footer-details > .shusha-contact-card { grid-column: 1 / -1; }
+  .shusha-footer-brand > p { max-width: none; }
+  .shusha-footer-nav a { min-height: 44px; }
+  .shusha-footer-copyright { margin-top: 28px; }
+  main:has(.shusha-company-page) { display: block; }
+  main:has(.shusha-company-page) .cms-page { padding-top: 20px; padding-bottom: 24px; }
+  main:has(.shusha-company-page) .cms__page__heading { margin-bottom: 24px; font-size: 40px; }
+  main:has(.shusha-company-page) .cms-page .prose > p:first-child { font-size: 17px; }
+  main:has(.shusha-company-page) .shusha-company-page { padding-top: 0; }
+  .shusha-company-sidebar { position: static; }
+  .shusha-contact-card:not(.shusha-contact-card--compact) { padding: 24px; }
+}

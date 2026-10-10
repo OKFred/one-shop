@@ -1,0 +1,76 @@
+{%- liquid
+  assign company_contact = false
+  if section.settings.mode == 'contact'
+    assign company_contact = true
+  endif
+  assign company_heading = page.title | default: section.settings.heading
+  assign company_has_contacts = false
+  if settings.shusha_whatsapp_sri_lanka != blank or settings.shusha_whatsapp_china != blank or settings.shusha_support_email != blank
+    assign company_has_contacts = true
+  endif
+-%}
+<section class="shusha-company page-width" aria-labelledby="ShushaCompany-{{ section.id }}">
+  <header class="shusha-company__heading">
+    <p class="shusha-eyebrow">SHUSHA · {{ section.settings.eyebrow | escape }}</p>
+    <h1 id="ShushaCompany-{{ section.id }}">{{ company_heading | escape }}</h1>
+    {% if section.settings.introduction != blank %}<p class="shusha-company__intro">{{ section.settings.introduction | escape }}</p>{% endif %}
+  </header>
+  <div class="shusha-company__grid">
+    <div class="shusha-company__story">
+      {% if page.content != blank %}<div class="shusha-company__content rte">{{ page.content }}</div>{% endif %}
+      {% if company_has_contacts %}
+        <div class="shusha-company__contact">
+          <p class="shusha-eyebrow">A direct conversation</p>
+          <h2>{% if company_contact %}Contact our team{% else %}Let’s talk about your order{% endif %}</h2>
+          <p>Share the style you are interested in, or your order reference. Our team can review availability, shipping and payment details with you.</p>
+          {% render 'shusha-contact-actions' %}
+        </div>
+      {% endif %}
+      <div class="shusha-company__next">
+        <a class="shusha-primary" href="{{ routes.all_products_collection_url }}">Explore the collection <span aria-hidden="true">→</span></a>
+        {% if company_contact == false and pages.contact != blank %}<a class="shusha-secondary" href="{{ pages.contact.url }}">Contact SHUSHA</a>{% endif %}
+        {% if company_contact and pages['how-to-order'] != blank %}<a class="shusha-secondary" href="{{ pages['how-to-order'].url }}">How to order</a>{% endif %}
+      </div>
+    </div>
+    <aside class="shusha-company__identity" aria-label="SHUSHA company information">
+      <div class="shusha-company-card">
+        <span class="shusha-company-card__monogram" aria-hidden="true">S</span>
+        <p class="shusha-eyebrow">Our home</p>
+        <p class="shusha-company-card__brand">SHUSHA</p>
+        {% if settings.shusha_business_name != blank %}<div class="shusha-company-card__legal"><span>Business name</span><p>{{ settings.shusha_business_name | escape }}</p></div>{% endif %}
+        {% if settings.shusha_business_address_line1 != blank %}
+          <div class="shusha-company-card__address"><span class="shusha-company-card__label">Business address</span>{% render 'shusha-company-address' %}</div>
+          {% if settings.shusha_business_country != blank %}
+            {%- liquid
+              assign company_map_query = settings.shusha_business_address_line1
+              if settings.shusha_business_address_line2 != blank
+                assign company_map_query = company_map_query | append: ', ' | append: settings.shusha_business_address_line2
+              endif
+              if settings.shusha_business_city != blank
+                assign company_map_query = company_map_query | append: ', ' | append: settings.shusha_business_city
+              endif
+              if settings.shusha_business_postal_code != blank
+                assign company_map_query = company_map_query | append: ' ' | append: settings.shusha_business_postal_code
+              endif
+              assign company_map_query = company_map_query | append: ', ' | append: settings.shusha_business_country
+            -%}
+            <a class="shusha-company-card__map" href="https://www.google.com/maps/search/?api=1&amp;query={{ company_map_query | strip | url_encode }}" target="_blank" rel="noopener noreferrer">Open address in Maps <span aria-hidden="true">↗</span></a>
+          {% endif %}
+        {% endif %}
+        <div class="shusha-company-card__note">Worldwide order requests<br>Personal confirmation before payment</div>
+      </div>
+      <div class="shusha-company__payment-note">{% render 'shusha-brand-icon', brand: 'wise' %}<p>Wise or bank transfer instructions are provided with your confirmed order quote.</p></div>
+    </aside>
+  </div>
+</section>
+{% schema %}
+{
+  "name": "SHUSHA company page",
+  "settings": [
+    { "type": "select", "id": "mode", "label": "Page purpose", "options": [{ "value": "about", "label": "About" }, { "value": "contact", "label": "Contact" }], "default": "about" },
+    { "type": "text", "id": "eyebrow", "label": "Eyebrow", "default": "A little closer" },
+    { "type": "text", "id": "heading", "label": "Fallback heading", "default": "About SHUSHA" },
+    { "type": "textarea", "id": "introduction", "label": "Introduction", "default": "Clothing from Sri Lanka, with personal support for worldwide order requests." }
+  ]
+}
+{% endschema %}

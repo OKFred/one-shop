@@ -189,6 +189,13 @@
         }
       }
     },
+    "shusha_business_name": "",
+    "shusha_business_address_line1": "",
+    "shusha_business_address_line2": "",
+    "shusha_business_city": "",
+    "shusha_business_postal_code": "",
+    "shusha_business_country": "",
+    "shusha_support_email": "",
     "shusha_whatsapp_sri_lanka": "",
     "shusha_whatsapp_china": ""
   },
@@ -383,6 +390,13 @@
           }
         }
       },
+      "shusha_business_name": "",
+      "shusha_business_address_line1": "",
+      "shusha_business_address_line2": "",
+      "shusha_business_city": "",
+      "shusha_business_postal_code": "",
+      "shusha_business_country": "",
+      "shusha_support_email": "",
       "shusha_whatsapp_sri_lanka": "",
       "shusha_whatsapp_china": ""
     }

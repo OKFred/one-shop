@@ -1,0 +1,18 @@
+{% comment %}Direct links only. No contact form, third-party scripts, geolocation or embedded map.{% endcomment %}
+<div class="shusha-contact-actions{% if compact %} shusha-contact-actions--compact{% endif %}">
+  {% if settings.shusha_whatsapp_sri_lanka != blank %}
+    <a class="shusha-contact-action" href="{{ settings.shusha_whatsapp_sri_lanka | escape }}" target="_blank" rel="noopener noreferrer">
+      {% render 'shusha-brand-icon', brand: 'whatsapp' %}<span>WhatsApp<span class="shusha-contact-action__detail">Sri Lanka</span></span><span class="shusha-contact-action__arrow" aria-hidden="true">↗</span>
+    </a>
+  {% endif %}
+  {% if settings.shusha_whatsapp_china != blank %}
+    <a class="shusha-contact-action" href="{{ settings.shusha_whatsapp_china | escape }}" target="_blank" rel="noopener noreferrer">
+      {% render 'shusha-brand-icon', brand: 'whatsapp' %}<span>WhatsApp<span class="shusha-contact-action__detail">China</span></span><span class="shusha-contact-action__arrow" aria-hidden="true">↗</span>
+    </a>
+  {% endif %}
+  {% if settings.shusha_support_email != blank %}
+    <a class="shusha-contact-action" href="mailto:{{ settings.shusha_support_email | strip | url_encode }}">
+      <span class="shusha-contact-action__symbol" aria-hidden="true">@</span><span>Email<span class="shusha-contact-action__detail">{{ settings.shusha_support_email | escape }}</span></span><span class="shusha-contact-action__arrow" aria-hidden="true">↗</span>
+    </a>
+  {% endif %}
+</div>

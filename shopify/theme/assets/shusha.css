@@ -24,10 +24,60 @@ body { background: #faf8f4; color: #272b24; }
 .shusha-category__label { display: flex; justify-content: space-between; gap: 12px; padding: 16px 0; border-bottom: 1px solid #deded2; font-family: Georgia, 'Times New Roman', serif; font-size: 23px; }
 .shusha-footer { padding-top: 40px; padding-bottom: 30px; border-top: 1px solid #deded2; }
 .shusha-footer__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; }
+.shusha-footer__brand { display: block; margin-bottom: 16px; font-family: Georgia, 'Times New Roman', serif; font-size: 30px; font-weight: 400; letter-spacing: .1em; color: #303e2c; }
+.shusha-footer__heading { margin: 0 0 16px; font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: #62655b; }
+.shusha-footer__description { max-width: 340px; font-size: 14px; line-height: 1.75; }
+.shusha-footer__company { margin-top: 22px; font-size: 13px; line-height: 1.75; color: #62655b; }
+.shusha-footer__company p { margin: 0 0 8px; }
+.shusha-footer__bottom { margin-top: 34px; padding-top: 20px; border-top: 1px solid #deded2; color: #62655b; }
 .shusha-footer nav, .shusha-footer__support { display: grid; align-content: start; gap: 12px; }
+.shusha-footer__support > .shusha-brand-link { font-size: 13px; line-height: 1.6; }
 .shusha-brand-link { display: inline-flex; align-items: center; gap: 8px; }
 .shusha-brand-icon { width: 20px; height: 20px; flex-shrink: 0; }
 .shusha-brand-icon--whatsapp { color: #25d366; }
+.shusha-company { padding-top: 58px; padding-bottom: 76px; }
+.shusha-company__heading { max-width: 830px; margin-bottom: 44px; }
+.shusha-company__heading h1 { margin: 16px 0 22px; font-family: Georgia, 'Times New Roman', serif; font-size: clamp(40px, 5vw, 66px); font-weight: 400; line-height: 1.08; letter-spacing: -.035em; color: #293327; }
+.shusha-company__intro { max-width: 650px; font-size: 18px; line-height: 1.7; color: #62655b; }
+.shusha-company__grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: clamp(32px, 6vw, 80px); align-items: start; }
+.shusha-company__story { min-width: 0; }
+.shusha-company__content { font-size: 16px; line-height: 1.85; color: #555e4f; }
+.shusha-company__content h2, .shusha-company__contact h2 { margin: 26px 0 16px; font-family: Georgia, 'Times New Roman', serif; font-size: 29px; line-height: 1.25; font-weight: 400; color: #293327; }
+.shusha-company__content h2:first-child { margin-top: 0; }
+.shusha-company__content p { margin: 0 0 22px; }
+.shusha-company__content ul, .shusha-company__content ol { padding-left: 22px; }
+.shusha-company__content li { padding-left: 4px; margin: 8px 0; }
+.shusha-company__contact { margin-top: 36px; padding-top: 28px; border-top: 1px solid #deded2; }
+.shusha-company__contact h2 { margin-top: 12px; }
+.shusha-company__contact > p:not(.shusha-eyebrow) { max-width: 520px; margin-bottom: 22px; color: #62655b; font-size: 14px; line-height: 1.75; }
+.shusha-company__next { display: flex; flex-wrap: wrap; align-items: center; gap: 22px; margin-top: 34px; }
+.shusha-company__next .shusha-primary { gap: 30px; }
+.shusha-company-card { position: relative; overflow: hidden; padding: 36px; background: #303e2c; color: #fff; border-radius: 12px; }
+.shusha-company-card > :not(.shusha-company-card__monogram) { position: relative; }
+.shusha-company-card .shusha-eyebrow { margin-top: 0; color: #c1cbb8; }
+.shusha-company-card__monogram { position: absolute; top: -48px; right: -5px; color: rgb(255 255 255 / 4%); font-family: Georgia, 'Times New Roman', serif; font-size: 340px; line-height: 1; pointer-events: none; }
+.shusha-company-card__brand { margin: 15px 0 28px; font-family: Georgia, 'Times New Roman', serif; font-size: 32px; letter-spacing: .12em; }
+.shusha-company-card__legal { margin-bottom: 22px; }
+.shusha-company-card__legal > span, .shusha-company-card__label { display: block; margin-bottom: 8px; font-size: 11px; letter-spacing: .13em; text-transform: uppercase; color: #c1cbb8; }
+.shusha-company-card__legal p { margin: 0; font-size: 15px; line-height: 1.7; }
+.shusha-company-address { display: grid; gap: 2px; font-style: normal; line-height: 1.8; overflow-wrap: anywhere; }
+.shusha-company-card__address { font-size: 16px; }
+.shusha-company-card__map { display: inline-flex; align-items: center; gap: 16px; min-height: 44px; margin-top: 16px; color: #fff; font-size: 13px; text-underline-offset: 5px; }
+.shusha-company-card__note { margin-top: 25px; padding-top: 20px; border-top: 1px solid rgb(255 255 255 / 18%); font-size: 12px; line-height: 1.7; color: #d5decc; }
+.shusha-company__payment-note { display: flex; align-items: flex-start; gap: 12px; margin-top: 20px; padding: 0 8px; color: #62655b; }
+.shusha-company__payment-note .shusha-brand-icon { margin-top: 3px; }
+.shusha-company__payment-note p { margin: 0; font-size: 12px; line-height: 1.75; }
+.shusha-contact-actions { display: grid; gap: 10px; }
+.shusha-contact-action { display: flex; align-items: center; gap: 14px; min-height: 68px; padding: 16px 18px; border: 1px solid #deded2; border-radius: 8px; color: #303e2c; text-decoration: none; background: #fffefa; transition: border-color .18s ease, background .18s ease; }
+.shusha-contact-action:hover { border-color: #8d9584; background: #eeede5; }
+.shusha-contact-action .shusha-brand-icon { width: 24px; height: 24px; }
+.shusha-contact-action__detail { display: block; margin-top: 3px; color: #62655b; font-size: 12px; overflow-wrap: anywhere; }
+.shusha-contact-action__symbol { width: 24px; height: 24px; flex-shrink: 0; font-size: 22px; line-height: 1; text-align: center; }
+.shusha-contact-action__arrow { margin-left: auto; padding-left: 6px; font-size: 18px; }
+.shusha-contact-actions--compact { gap: 8px; }
+.shusha-contact-actions--compact .shusha-contact-action { min-height: 48px; padding: 10px 12px; background: transparent; }
+.shusha-contact-action:focus-visible, .shusha-footer a:focus-visible { outline: 3px solid #303e2c; outline-offset: 3px; }
+.shusha-company-card__map:focus-visible { outline: 3px solid #d5decc; outline-offset: 3px; }
 .shusha-courier { margin: 20px 0; padding: 20px; border: 1px solid #deded2; border-radius: 8px; }
 .shusha-courier label { display: block; margin-bottom: 10px; font-weight: 600; }
 .shusha-courier input { width: 100%; min-height: 48px; padding: 12px; border: 1px solid #8d9584; border-radius: 4px; background: #fff; color: #272b24; }
@@ -44,5 +94,15 @@ body { background: #faf8f4; color: #272b24; }
   .shusha-category__image { aspect-ratio: 3/4; }
   .shusha-category__label { font-size: 19px; }
   .shusha-footer__grid { grid-template-columns: minmax(0, 1fr); }
+  .shusha-footer__grid { gap: 28px; }
+  .shusha-company { padding-top: 34px; padding-bottom: 46px; }
+  .shusha-company__heading { margin-bottom: 32px; }
+  .shusha-company__heading h1 { font-size: 44px; }
+  .shusha-company__intro { font-size: 16px; }
+  .shusha-company__grid { grid-template-columns: minmax(0, 1fr); gap: 30px; }
+  .shusha-company-card { padding: 28px; }
+  .shusha-company__next { gap: 18px; }
+  .shusha-company__next .shusha-primary { width: 100%; }
   .shusha-hero__actions, .shusha-primary { width: 100%; }
 }
+@media (prefers-reduced-motion: reduce) { .shusha-contact-action { transition: none; } }

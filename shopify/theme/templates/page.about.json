@@ -1,0 +1,14 @@
+{
+  "sections": {
+    "main": {
+      "type": "shusha-company-page",
+      "settings": {
+        "mode": "about",
+        "eyebrow": "A little closer",
+        "heading": "About SHUSHA",
+        "introduction": "Clothing from Sri Lanka, with personal support for worldwide order requests."
+      }
+    }
+  },
+  "order": ["main"]
+}

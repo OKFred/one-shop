@@ -1,0 +1,17 @@
+{% comment %}Public merchant fields are supplied in the private theme copy. No fabricated address or legal identity.{% endcomment %}
+{%- if settings.shusha_business_address_line1 != blank -%}
+  <address class="shusha-company-address">
+    <span>{{ settings.shusha_business_address_line1 | escape }}</span>
+    {% if settings.shusha_business_address_line2 != blank %}<span>{{ settings.shusha_business_address_line2 | escape }}</span>{% endif %}
+    {% if settings.shusha_business_city != blank or settings.shusha_business_postal_code != blank %}
+      {%- liquid
+        assign company_city_and_postal = settings.shusha_business_city | default: settings.shusha_business_postal_code
+        if settings.shusha_business_city != blank and settings.shusha_business_postal_code != blank
+          assign company_city_and_postal = settings.shusha_business_city | append: ' ' | append: settings.shusha_business_postal_code
+        endif
+      -%}
+      <span>{{ company_city_and_postal | escape }}</span>
+    {% endif %}
+    {% if settings.shusha_business_country != blank %}<span>{{ settings.shusha_business_country | escape }}</span>{% endif %}
+  </address>
+{%- endif -%}
