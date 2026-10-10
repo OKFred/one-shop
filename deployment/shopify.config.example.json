@@ -1,0 +1,4 @@
+{
+  "shopifyBridge": {"jobsEnabled": false, "sharedCapacityEnabled": false},
+  "extensionToAppend": {"name":"shopify-bridge","resolve":"extensions/shopify-bridge","enabled":true,"priority":130}
+}
