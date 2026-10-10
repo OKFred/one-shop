@@ -17,7 +17,40 @@
   .shusha-wise-payment {
     display: grid;
     gap: 0.75rem;
-    .button { justify-self: start; }
+
+    .shusha-wise-payment-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      justify-self: start;
+      gap: 0.625rem;
+      min-height: 48px;
+      min-width: 220px;
+      max-width: 100%;
+      box-sizing: border-box;
+      padding: 0.75rem 1.5rem;
+      border: 1px solid #303e2c;
+      border-radius: 0.5rem;
+      background: #303e2c;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      line-height: 1.5;
+      text-align: center;
+      text-decoration: none;
+
+      &:hover {
+        background: #4c5e43;
+        border-color: #4c5e43;
+      }
+
+      &:focus-visible {
+        outline: 3px solid #303e2c;
+        outline-offset: 3px;
+      }
+
+      svg { flex-shrink: 0; }
+    }
   }
 
   .shusha-bank-backup {
@@ -33,6 +66,6 @@
 
   @media (max-width: 480px) {
     .shusha-bank-backup dl > div { grid-template-columns: 1fr; gap: 0.25rem; }
-    .shusha-wise-payment .button { justify-self: stretch; text-align: center; }
+    .shusha-wise-payment .shusha-wise-payment-button { justify-self: stretch; width: 100%; min-width: 0; }
   }
 }

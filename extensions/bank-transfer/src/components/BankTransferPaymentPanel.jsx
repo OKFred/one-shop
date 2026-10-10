@@ -41,7 +41,7 @@ export default function BankTransferPaymentPanel({ quote = null, setting }) {
         <>
           {quote.wisePaymentUrl && (
             <div className="shusha-wise-payment">
-              <a className="button primary" href={quote.wisePaymentUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <a className="shusha-wise-payment-button" href={quote.wisePaymentUrl} target="_blank" rel="noopener noreferrer">
                 <BrandIcon brand="wise" />
                 <span>Pay with Wise</span>
               </a>
