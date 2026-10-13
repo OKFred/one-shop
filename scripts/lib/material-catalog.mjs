@@ -10,6 +10,42 @@ export function descriptionRows(html) {
   }] }];
 }
 
+function existingDescriptionRows(value) {
+  let rows;
+  try { rows = typeof value === 'string' ? JSON.parse(value) : value; }
+  catch { throw new Error('Stored material description is not valid JSON'); }
+  const isObject = item => item !== null && typeof item === 'object' && !Array.isArray(item);
+  assert(Array.isArray(rows) && rows.every(row => isObject(row)
+    && typeof row.id === 'string' && Number.isFinite(row.size)
+    && Array.isArray(row.columns) && row.columns.every(column => isObject(column)
+      && typeof column.id === 'string' && Number.isFinite(column.size) && isObject(column.data))),
+  'Stored material description must contain native editor rows');
+  return structuredClone(rows);
+}
+
+/**
+ * EverShop 2.2.1's product validator defaults an omitted description to [], even
+ * on partial updates. Preserve copy for this publisher's enable/anchor updates
+ * through the documented catalog service; explicit descriptions still replace
+ * or clear it. Keep native validation/sanitization away from the caller's data.
+ * The publisher already passes category_id/tax_class explicitly because their
+ * native defaults are null; this adapter adds only the missing description.
+ */
+export function createDescriptionPreservingUpdate(pool, updateProduct) {
+  return async (uuid, data, context) => {
+    const update = structuredClone(data);
+    if (update.description === undefined) {
+      const { rows } = await pool.query(
+        `SELECT d.description FROM product p JOIN product_description d
+         ON d.product_description_product_id=p.product_id WHERE p.uuid=$1`, [uuid]
+      );
+      assert(rows.length === 1, 'Stored material product description is unresolved');
+      update.description = existingDescriptionRows(rows[0].description);
+    }
+    return updateProduct(uuid, update, context);
+  };
+}
+
 // These narrow SQL operations match the native v2 variant contract. The native
 // REST controllers are intentionally not imported through private package paths.
 export async function createVariantGroup(client, attributeCodes, groupId, sourceId) {
@@ -103,7 +139,7 @@ export async function createCatalogServices() {
   } catch (error) { await pool.end(); throw error; }
   return {
     pool, qb, createAttribute: catalog.createAttribute, createProduct: catalog.createProduct,
-    updateProduct: catalog.updateProduct, descriptionRows,
+    updateProduct: createDescriptionPreservingUpdate(pool, catalog.updateProduct), descriptionRows,
     // Bind each call to a dedicated transaction while advisory locks stay on the
     // outer connection. Group reservation is completed with the frozen ledger.
     createGroup: controller(async request => {
