@@ -336,8 +336,15 @@ test('native theme courier attributes are shown in the separate Shopify adapter'
 });
 
 sqlTest('price following deduplicates stable prices while allowing A to B to A', async (pool) => {
-  await pool.query(`INSERT INTO shusha_bridge_mapping(kind,source_key,record) VALUES('product','synthetic-source',$1)`,
-    [JSON.stringify({ productGid: 'gid://shopify/Product/1000', variants: [{ sku, variantGid: 'gid://shopify/ProductVariant/1000', inventoryItemGid: mapping.inventoryItemId }] })]);
+  const sourceUuid = '00000000-0000-4000-8000-000000001000';
+  await pool.query(`ALTER TABLE product ADD COLUMN uuid uuid DEFAULT '${sourceUuid}';
+    CREATE TABLE attribute(attribute_id integer PRIMARY KEY,attribute_code text);
+    CREATE TABLE product_attribute_value_index(product_id integer,attribute_id integer,option_text text);
+    INSERT INTO attribute VALUES(1,'shusha_color'),(2,'shusha_size');
+    INSERT INTO product_attribute_value_index VALUES(1,1,'BLACK'),(1,2,'S')`);
+  await pool.query(`INSERT INTO shusha_bridge_mapping(kind,source_key,record) VALUES('product',$1,$2)`,
+    [sourceUuid, JSON.stringify({ sourceUuid, handle: 'l1000', productGid: 'gid://shopify/Product/1000', variants: [{
+      uuid: sourceUuid, sku, color: 'BLACK', size: 'S', variantGid: 'gid://shopify/ProductVariant/1000', inventoryItemGid: mapping.inventoryItemId }] })]);
   assert.equal((await enqueuePriceChanges(pool)).queued, 1); assert.equal((await enqueuePriceChanges(pool)).queued, 0);
   await pool.query('UPDATE product SET price=20'); assert.equal((await enqueuePriceChanges(pool)).queued, 1);
   await pool.query('UPDATE product SET price=10'); assert.equal((await enqueuePriceChanges(pool)).queued, 1);

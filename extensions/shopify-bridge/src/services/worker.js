@@ -4,6 +4,8 @@ import { retailUsd, createCatalogFollower } from './catalog.js';
 import { enqueue, processOutbox, withTransaction, releaseAdvisoryOwner } from './outbox.js';
 import { hydrateShopifyOrder, ingestShopifyOrder, reconcileRecentOrders, auditCapacity } from './orders.js';
 import { integer, openCapacity } from './inventory.js';
+import { adoptionHash, verifyPriceIdentity } from './adoption.js';
+import { createRepositories } from './repositories.js';
 
 const COLLECTION_CATEGORIES = ['dresses', 'pants', 'tops'];
 const COLLECTION_PRODUCT_READ = `query BridgeCollectionProducts($ids:[ID!]!,$publication:ID!){nodes(ids:$ids){
@@ -165,17 +167,35 @@ export async function processInbox(pool, { client, tokens, expectedShop, limit =
 }
 
 /** Price changes only: never productSet, inventory, option replacement or image writes. */
+async function nativePriceRows(pool, mapping) {
+  if (!Array.isArray(mapping?.variants) || !mapping.variants.length) throw new Error('Mapped variants are required for price synchronization');
+  const skus = mapping.variants.map(variant => variant.sku);
+  if (new Set(skus).size !== skus.length) throw new Error('Price mapping SKUs must be unique');
+  const native = (await pool.query(`SELECT p.uuid::text,p.sku,p.price,
+    COALESCE((SELECT jsonb_agg(jsonb_build_object('name',a.attribute_code,'value',v.option_text) ORDER BY a.attribute_code,v.option_text)
+      FROM product_attribute_value_index v JOIN attribute a ON a.attribute_id=v.attribute_id
+      WHERE v.product_id=p.product_id AND a.attribute_code IN ('shusha_color','shusha_size')),'[]'::jsonb) AS options
+    FROM product p WHERE p.sku=ANY($1::text[]) ORDER BY p.sku`, [skus])).rows;
+  if (native.length !== skus.length) throw new Error('Every price SKU must still exist natively');
+  for (const row of native) {
+    const variant = mapping.variants.find(mapped => mapped.sku === row.sku);
+    if (variant.uuid !== row.uuid || typeof variant.color !== 'string' || typeof variant.size !== 'string' || row.options?.length !== 2 ||
+      !row.options.some(option => option.name === 'shusha_color' && option.value === variant.color) ||
+      !row.options.some(option => option.name === 'shusha_size' && option.value === variant.size)) throw new Error('Native UUID/SKU/real options changed; price synchronization paused');
+  }
+  return native;
+}
+
 export async function enqueuePriceChanges(pool) {
   const mappings = (await pool.query(`SELECT source_key,record FROM shusha_bridge_mapping WHERE kind='product' ORDER BY source_key`)).rows;
   let queued = 0;
   for (const mapping of mappings) {
-    if (!Array.isArray(mapping.record.variants) || !mapping.record.variants.length) throw new Error('Mapped variants are required for price synchronization');
-    const skus = mapping.record.variants.map((variant) => variant.sku);
-    const native = (await pool.query('SELECT sku,price FROM product WHERE sku=ANY($1::text[]) ORDER BY sku', [skus])).rows;
-    if (native.length !== skus.length) throw new Error('Every price SKU must still exist natively');
+    if (mapping.record.sourceUuid !== mapping.source_key) throw new Error('Source-bound price mapping requires revalidation');
+    const native = await nativePriceRows(pool, mapping.record);
     const variants = native.map((row) => ({ id: mapping.record.variants.find((variant) => variant.sku === row.sku).variantGid, price: retailUsd(String(row.price)) }));
     if (variants.some((row) => !/^gid:\/\/shopify\/ProductVariant\/[0-9]+$/.test(row.id || ''))) throw new Error('Mapped price variant identifier is required');
-    const payload = { productId: mapping.record.productGid, variants };
+    const payload = { productId: mapping.record.productGid, sourceKey: mapping.source_key,
+      mappingSha256: adoptionHash(mapping.record), sourcePrices: native.map(row => ({ sku: row.sku, sourceUsd: String(row.price) })), variants };
     payload.digest = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
     const aggregateKey = `product:${payload.productId}`;
     queued += await withTransaction(pool, async (connection) => {
@@ -191,19 +211,32 @@ export async function enqueuePriceChanges(pool) {
 }
 
 const PRICE_MUTATION = `mutation BridgePrices($productId:ID!,$variants:[ProductVariantsBulkInput!]!){
-  productVariantsBulkUpdate(productId:$productId,variants:$variants){productVariants{id price} userErrors{field}}
+  productVariantsBulkUpdate(productId:$productId,variants:$variants,allowPartialUpdates:false){productVariants{id price} userErrors{field}}
 }`;
-const PRICE_READ = `query BridgePriceRead($id:ID!){product(id:$id){variants(first:250){pageInfo{hasNextPage} nodes{id price}}}}`;
 
-export async function applyPriceIntent(row, { client }) {
-  const read = async () => {
-    const data = await client.request(PRICE_READ, { id: row.payload.productId });
-    if (!data.product || data.product.variants.pageInfo.hasNextPage) throw new Error('Complete mapped price readback is required');
-    return row.payload.variants.every((desired) => data.product.variants.nodes.some((variant) => variant.id === desired.id && Number(variant.price) === Number(desired.price)));
-  };
-  if (await read()) return;
-  await client.request(PRICE_MUTATION, { productId: row.payload.productId, variants: row.payload.variants }, { kind: 'mutation' });
-  if (!(await read())) throw new Error('Price-only write needs successful native readback');
+export async function applyPriceIntent(row, { client, pool, mappingStore = null }) {
+  if (!pool || typeof row.payload?.sourceKey !== 'string') throw new Error('A persisted source-bound price intent is required');
+  const store = mappingStore || createRepositories(pool).mappings;
+  return store.withLock(`product:${row.payload.sourceKey}`, async () => {
+    const mapping = await store.getProduct(row.payload.sourceKey);
+    if (!mapping || mapping.sourceUuid !== row.payload.sourceKey || mapping.productGid !== row.payload.productId ||
+      adoptionHash(mapping) !== row.payload.mappingSha256) throw new Error('Frozen price-intent mapping changed');
+    await nativePriceRows(pool, mapping);
+    if (row.payload.variants?.length !== mapping.variants.length || row.payload.sourcePrices?.length !== mapping.variants.length) throw new Error('Complete frozen variant prices are required');
+    for (const variant of mapping.variants) {
+      const price = row.payload.variants.filter(value => value.id === variant.variantGid);
+      const source = row.payload.sourcePrices.filter(value => value.sku === variant.sku);
+      if (price.length !== 1 || source.length !== 1 || Object.keys(price[0]).sort().join(',') !== 'id,price' ||
+        price[0].price !== retailUsd(source[0].sourceUsd)) throw new Error('Price intent differs from its captured source USD');
+    }
+    const matches = product => row.payload.variants.every(desired => product.variants.some(variant => variant.id === desired.id && Number(variant.price) === Number(desired.price)));
+    const product = await verifyPriceIdentity({ client, mapping, mappingStore: store });
+    if (matches(product)) return;
+    const response = await client.request(PRICE_MUTATION, { productId: row.payload.productId, variants: row.payload.variants }, { kind: 'mutation' });
+    if (!response.productVariantsBulkUpdate || response.productVariantsBulkUpdate.userErrors?.length !== 0) throw new Error('Price-only write rejected; retain the original outbox intent');
+    const after = await verifyPriceIdentity({ client, mapping, mappingStore: store });
+    if (!matches(after)) throw new Error('Price-only write needs successful ownership and amount readback');
+  });
 }
 
 export async function openNewMappedCapacity(runtime, env = process.env) {
@@ -241,7 +274,7 @@ export async function runBridgeMinute(runtime, env = process.env) {
     client: capacityEnabled ? inventoryClient : client, writesEnabled: true,
     allowedKinds: capacityEnabled ? ['catalog.prices', 'inventory.shopify', 'inventory.evershop'] : ['catalog.prices'],
     resolveInventory: capacityEnabled ? (sku) => resolveInventory(pool, sku, env.SHOPIFY_LOCATION_ID) : undefined,
-    handlers: { 'catalog.prices': (row) => applyPriceIntent(row, { client }) }
+    handlers: { 'catalog.prices': (row) => applyPriceIntent(row, { client, pool, mappingStore: runtime.repositories.mappings }) }
   });
   const content = await followPublishedCollections(runtime, env);
   return { status: inbox.failed || outbox.frozen || outbox.unknown ? 'attention' : 'completed', catalog, opening, prices, inbox, outbox, content };
