@@ -16,7 +16,7 @@ function decimal(value, label, maxDecimals, maxWholeDigits = 8) {
 function normalizeRules(input = {}) {
   const enabled = input.enabled === undefined ? false : input.enabled;
   if (typeof enabled !== 'boolean') throw new Error('retailPricing.enabled must be boolean');
-  const multiplier = input.multiplier === undefined ? '1.1' : input.multiplier;
+  const multiplier = input.multiplier === undefined ? '1.5' : input.multiplier;
   const factor = decimal(multiplier, 'retailPricing.multiplier', 6, 3);
   if (factor.numerator <= 0n || factor.numerator > 100n * factor.denominator) {
     throw new Error('retailPricing.multiplier must be greater than 0 and at most 100');

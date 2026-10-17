@@ -5,7 +5,8 @@ import sanitizeHtml from 'sanitize-html';
 import { normalizeRules, retailCents } from '../../../retail-pricing/src/services/pricing.js';
 import { UnknownMutationOutcomeError } from './shopifyClient.js';
 
-const pricing = normalizeRules({ enabled: true, multiplier: '1.1' });
+const pricing = normalizeRules({ enabled: true, multiplier: '1.5' });
+const pricePolicy = `source-resale-usd-times-${pricing.multiplier}-ceiling-.99`;
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -121,7 +122,7 @@ export async function buildCatalogSnapshot({ db, storeMap, mediaIndex, mediaRoot
         canonicalPath: `/${plan.category}/${anchor.url_key}`, publishedAt: new Date(publication.created_at).toISOString(), variants, images: [...images.values()] });
     }
     await db.query('COMMIT'); transaction = false;
-    const snapshot = { schemaVersion: 1, currency: 'USD', pricePolicy: 'source-resale-usd-times-1.1-ceiling-.99', capturedAt: now().toISOString(), styles };
+    const snapshot = { schemaVersion: 1, currency: 'USD', pricePolicy, capturedAt: now().toISOString(), styles };
     return { ...snapshot, contentSha256: hash(JSON.stringify(snapshot)) };
   } catch (error) { if (transaction) await db.query('ROLLBACK').catch(() => {}); throw error; }
   finally { for (const key of locks.reverse()) await db.query('SELECT pg_advisory_unlock(hashtext($1))', [key]); }
@@ -141,7 +142,7 @@ const getVariantMedia = 'query BridgeVariantMedia($ids:[ID!]!){nodes(ids:$ids){.
 const appendVariantMedia = 'mutation BridgeVariantMediaAttach($productId:ID!,$variantMedia:[ProductVariantAppendMediaInput!]!){productVariantAppendMedia(productId:$productId,variantMedia:$variantMedia){product{id} userErrors{code field}}}';
 
 export function validateCatalogSnapshot(snapshot) {
-  assert(snapshot?.schemaVersion === 1 && snapshot.currency === 'USD' && snapshot.pricePolicy === 'source-resale-usd-times-1.1-ceiling-.99' && Array.isArray(snapshot.styles) && snapshot.styles.length <= 1000, 'Unsupported catalog snapshot');
+  assert(snapshot?.schemaVersion === 1 && snapshot.currency === 'USD' && snapshot.pricePolicy === pricePolicy && Array.isArray(snapshot.styles) && snapshot.styles.length <= 1000, 'Unsupported catalog snapshot');
   const { contentSha256, ...unsigned } = snapshot;
   assert(contentSha256 === hash(JSON.stringify(unsigned)), 'Private catalog snapshot hash differs');
   const handles = new Set(); const skus = new Set(); const uuids = new Set();

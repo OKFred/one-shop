@@ -21,7 +21,7 @@ values for every managed SKU before enabling this adapter. It contains **LKR**,
 despite the source website offering a USD display. The adapter fetches the
 website's current public currency script on every run and reproduces its
 two-decimal USD display rounding. This USD value is the product's source price;
-the retail-pricing extension applies the separate 1.1 and upward `.99` policy.
+the retail-pricing extension applies the separate 1.5 and upward `.99` policy.
 
 The private `store-map.json` retains the existing schema version 1 and
 `site-resale-display` policy. Every entry must contain its exact case-sensitive

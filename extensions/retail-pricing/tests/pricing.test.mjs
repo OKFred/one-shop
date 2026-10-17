@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { normalizeRules, retailCents, retailPrice, retailSql, publicSku } from '../src/services/pricing.js';
 import { registerPricing } from '../src/services/registerPricing.js';
 
-const rules = normalizeRules({ enabled: true, multiplier: '1.1' });
+const rules = normalizeRules({ enabled: true, multiplier: '1.5' });
 function installed() {
   const hooks = new Map();
   registerPricing({
@@ -15,8 +15,20 @@ function installed() {
   return hooks;
 }
 
-test('source USD is rounded upwards only once and exact .99 boundaries do not drift', () => {
-  for (const [source, expected] of [['4.00',499n],['4.62',599n],['3.85',499n],['0',0n],['4.5363',499n],['4.5364',599n]]) {
+test('source USD uses the default 1.5 multiplier and rounds upwards only once', () => {
+  assert.equal(normalizeRules({ enabled: true }).multiplier, '1.5');
+  for (const [source, expected] of [['4.00',699n],['4.62',699n],['3.85',599n],['0',0n],['3.3266',499n],['3.3267',599n]]) {
+    assert.equal(retailCents(source, rules), expected);
+  }
+});
+
+test('supplier API source USD examples are marked up without a second currency conversion', () => {
+  assert.equal(retailCents('3.32', rules), 499n);
+  assert.equal(retailCents('4.40', rules), 699n);
+});
+
+test('exact 1.5 .99 boundaries do not drift or round the marked-up value early', () => {
+  for (const [source, expected] of [['0.6599',99n],['0.6600',99n],['0.6601',199n],['6.6599',999n],['6.6600',999n],['6.6601',1099n]]) {
     assert.equal(retailCents(source, rules), expected);
   }
   const unity = normalizeRules({ enabled: true, multiplier: '1' });
@@ -24,6 +36,14 @@ test('source USD is rounded upwards only once and exact .99 boundaries do not dr
   assert.equal(retailCents('0.9901', unity), 199n);
   assert.equal(retailCents('4.9900', unity), 499n);
   assert.equal(retailCents('4.9901', unity), 599n);
+});
+
+test('the previous 1.1 multiplier remains explicitly configurable', () => {
+  const previous = normalizeRules({ enabled: true, multiplier: '1.1' });
+  for (const [source, expected] of [['4.00',499n],['4.62',599n],['3.85',499n],['0',0n],['4.5363',499n],['4.5364',599n]]) {
+    assert.equal(retailCents(source, previous), expected);
+  }
+  assert.equal(retailPrice({ sku: 'SHUSHA-L1001', price: '4.40' }, previous), 4.99);
 });
 
 test('unsafe decimals, multiplier and storage overflow are rejected', () => {
@@ -34,7 +54,7 @@ test('unsafe decimals, multiplier and storage overflow are rejected', () => {
 });
 
 test('only managed SKUs change; old order aliases are presentation-only', () => {
-  assert.equal(retailPrice({sku:'SHUSHA-L1001',price:'4.00'},rules),4.99);
+  assert.equal(retailPrice({sku:'SHUSHA-L1001',price:'4.00'},rules),6.99);
   for (const sku of ['SHOE-1','shusha-L1001','X-SHUSHA-L1001','FRED-SUUSHA-L1001']) assert.equal(retailPrice({sku,price:'4.00'},rules),'4.00');
   assert.equal(retailPrice({sku:'SHUSHA-L1001',price:'4.00'},normalizeRules()),'4.00');
   assert.equal(publicSku('FRED-SUUSHA-L1001-V-L1001blam'),'SHUSHA-L1001-V-L1001blam');
@@ -42,9 +62,9 @@ test('only managed SKUs change; old order aliases are presentation-only', () => 
 });
 
 test('cart loader returns retail price without mutating supplier row or inventory', async () => {
-  const row=Object.freeze({sku:'SHUSHA-L1001',price:'4.00',qty:998});
+  const row=Object.freeze({sku:'SHUSHA-L1001',price:'4.40',qty:998});
   const loaded=await installed().get('cartItemProductLoaderFunction')(async()=>row)(1);
-  assert.notEqual(loaded,row); assert.equal(loaded.price,4.99);assert.equal(loaded.qty,998);assert.equal(row.price,'4.00');
+  assert.notEqual(loaded,row); assert.equal(loaded.price,6.99);assert.equal(loaded.qty,998);assert.equal(row.price,'4.40');
 });
 
 test('storefront SQL uses retail expression and bound filters; admin stays at source price', () => {
@@ -56,11 +76,11 @@ test('storefront SQL uses retail expression and bound filters; admin stays at so
   const current=[]; applied[0].callback(query,'eq','4.99',current);applied[1].callback(query,'eq','5.99',current);
   assert.equal(calls.length,2);assert.match(calls[0][1],/CEIL/);assert.deepEqual(calls[0][2],{shusha_retail_min_price:'4.99'});
   applied[0].callback(query,'eq','4.99 OR 1=1',current);assert.equal(calls.length,2);
-  assert.match(retailSql(rules),/110?::numeric/);
+  assert.match(retailSql(rules),/15::numeric \/ 10::numeric/);
 });
 
-function checkout({ priorTotal='9.98', currentTotal='9.98', currency='USD', priorCurrency='USD', priorQty=2, priorPrice='4.99' }={}) {
-  const current={grand_total:currentTotal,currency,items:[{uuid:'item-1',qty:2,product_price:'4.99',product_price_incl_tax:'4.99',final_price:'4.99',final_price_incl_tax:'4.99'}]};
+function checkout({ priorTotal='13.98', currentTotal='13.98', currency='USD', priorCurrency='USD', priorQty=2, priorPrice='6.99' }={}) {
+  const current={grand_total:currentTotal,currency,items:[{uuid:'item-1',qty:2,product_price:'6.99',product_price_incl_tax:'6.99',final_price:'6.99',final_price_incl_tax:'6.99'}]};
   const connection={queries:[],async query(statement){
     this.queries.push(statement);
     return statement.text.includes('FROM cart_item') ? {rows:[{...current.items[0],qty:priorQty,product_price:priorPrice}]} : {rows:[{grand_total:priorTotal,currency:priorCurrency}]};
@@ -76,9 +96,16 @@ test('native saveOrder guard accepts only the reviewed cart snapshot under row l
 });
 
 test('changed totals, currency, quantities or item prices require customer review', async () => {
-  for (const change of [{priorTotal:'8.98'},{priorCurrency:'GBP'},{priorQty:1},{priorPrice:'3.99'}]) {
+  for (const change of [{priorTotal:'9.98'},{priorCurrency:'GBP'},{priorQty:1},{priorPrice:'4.99'}]) {
     const fixture=checkout(change);
     await assert.rejects(installed().get('hook:saveOrder')(fixture.cart,fixture.connection),/Prices or cart contents have changed/);
     assert.equal(fixture.connection.saved,undefined);
   }
+});
+
+test('a cart displayed at 1.1 must be reviewed after the multiplier changes to 1.5', async () => {
+  const fixture=checkout({priorTotal:'9.98',priorPrice:'4.99'});
+  await assert.rejects(installed().get('hook:saveOrder')(fixture.cart,fixture.connection),/refresh checkout and review the new total/);
+  assert.equal(fixture.connection.saved,undefined);
+  assert.equal(fixture.current.grand_total,'13.98');
 });

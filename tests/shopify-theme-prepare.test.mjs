@@ -138,9 +138,9 @@ async function originalFixture(t) {
   const sha256 = createHash('sha256').update(png).digest('hex');
   const image = { sha256, localPath: `media/source-library/${sha256}.png`, bytes: png.length, alt: 'Synthetic original' };
   await fs.writeFile(path.join(directory, `${sha256}.png`), png);
-  const unsigned = { schemaVersion: 1, currency: 'USD', pricePolicy: 'source-resale-usd-times-1.1-ceiling-.99', capturedAt: fixedNow().toISOString(),
+  const unsigned = { schemaVersion: 1, currency: 'USD', pricePolicy: 'source-resale-usd-times-1.5-ceiling-.99', capturedAt: fixedNow().toISOString(),
     styles: [{ sourceId: 'L9001', sourceUuid, handle: 'l9001', category: 'dresses', title: 'Synthetic Dress', descriptionHtml: '<p>Synthetic</p>', images: [image],
-      variants: [{ uuid: sourceUuid, sku: 'SHUSHA-L9001', sourceVariantSku: 'SYN-RED-S', color: 'Red', size: 'S', sourceUsd: '10.00', retailUsd: '11.99', remainingCapacity: 12, imageHashes: [sha256] }] }] };
+      variants: [{ uuid: sourceUuid, sku: 'SHUSHA-L9001', sourceVariantSku: 'SYN-RED-S', color: 'Red', size: 'S', sourceUsd: '10.00', retailUsd: '15.99', remainingCapacity: 12, imageHashes: [sha256] }] }] };
   const catalog = { ...unsigned, contentSha256: createHash('sha256').update(JSON.stringify(unsigned)).digest('hex') };
   const filename = `shusha-${sha256}.png`; const h = harness();
   h.publication = { uuid: sourceUuid, plan: { sourceId: 'L9001', category: 'dresses', review: { ready: true, reviewedAt: '2026-10-01T00:00:00Z', reviewedSourceSha256: 'a'.repeat(64) }, variants: [{ images: [image] }] } };
