@@ -48,17 +48,26 @@ function providerProduct(style = nativeCatalog().styles[0], { marker = null, han
         quantities: [{ name: 'available', quantity: 4 - index }, { name: 'committed', quantity: index }, { name: 'on_hand', quantity: 4 }] }] })) };
 }
 
-function repository() {
+// PostgreSQL JSONB orders object keys by byte length then byte value; arrays
+// retain their order.  Persisted identity records must survive this round trip.
+function jsonbRoundTrip(value) {
+  if (Array.isArray(value)) return value.map(jsonbRoundTrip);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.keys(value).sort((a, b) => Buffer.byteLength(a) - Buffer.byteLength(b) || Buffer.compare(Buffer.from(a), Buffer.from(b)))
+    .map((key) => [key, jsonbRoundTrip(value[key])]));
+}
+
+function repository(roundTrip = structuredClone) {
   const products = new Map(), media = new Map(), operations = new Map(), saves = [];
   return { products, media, operations, saves,
     async withLock(key, action) { return action(); },
-    async getProduct(key) { return structuredClone(products.get(key)); },
-    async saveProduct(key, value) { products.set(key, structuredClone(value)); saves.push({ kind: 'product', key, value: structuredClone(value) }); },
-    async getMedia(key) { return structuredClone(media.get(key)); },
-    async saveMedia(key, value) { media.set(key, structuredClone(value)); saves.push({ kind: 'media', key, value: structuredClone(value) }); },
-    async getOperation(key) { return structuredClone(operations.get(key)); },
-    async saveOperation(key, value) { operations.set(key, structuredClone(value)); saves.push({ kind: 'operation', key, value: structuredClone(value) }); },
-    async listUnresolvedOperations() { return [...operations].filter(([, record]) => ['sent', 'unknown'].includes(record.status)).map(([key, record]) => ({ key, record: structuredClone(record) })); } };
+    async getProduct(key) { return roundTrip(products.get(key)); },
+    async saveProduct(key, value) { products.set(key, roundTrip(value)); saves.push({ kind: 'product', key, value: roundTrip(value) }); },
+    async getMedia(key) { return roundTrip(media.get(key)); },
+    async saveMedia(key, value) { media.set(key, roundTrip(value)); saves.push({ kind: 'media', key, value: roundTrip(value) }); },
+    async getOperation(key) { return roundTrip(operations.get(key)); },
+    async saveOperation(key, value) { operations.set(key, roundTrip(value)); saves.push({ kind: 'operation', key, value: roundTrip(value) }); },
+    async listUnresolvedOperations() { return [...operations].filter(([, record]) => ['sent', 'unknown'].includes(record.status)).map(([key, record]) => ({ key, record: roundTrip(record) })); } };
 }
 
 function auditProposal(snapshot, products) {
@@ -188,7 +197,7 @@ function protectedProduct(product) {
 
 function adoptionFixture(options = {}) {
   const snapshot = nativeCatalog(), product = providerProduct(snapshot.styles[0], options);
-  const products = [product], proposal = auditProposal(snapshot, products), mappingStore = repository();
+  const products = [product], proposal = auditProposal(snapshot, products), mappingStore = repository(options.repositoryRoundTrip);
   const client = fakeClient(products, { mappingStore, loseOwnerResponse: options.loseOwnerResponse, losePriceResponse: options.losePriceResponse });
   return { snapshot, products, proposal, mappingStore, client,
     plan: buildAdoptionPlan(proposal, snapshot, products),
@@ -221,6 +230,36 @@ test('an already matching source owner never receives another ownership write', 
   await adopter.apply(plan, { reviewedSha256: plan.preparedSha256 });
   assert.equal(client.calls.some((call) => call.options.kind === 'mutation'), false);
   assert.equal(mappingStore.products.get(anchorUuid).mode, 'adopted-price-only-v1');
+});
+
+test('JSONB object-key ordering preserves adopted identity, original audit hashes and idempotent price-only imports', async () => {
+  const { adopter, plan, client, mappingStore, snapshot } = adoptionFixture({ repositoryRoundTrip: jsonbRoundTrip });
+  await adopter.apply(plan, { reviewedSha256: plan.preparedSha256 });
+  const mapping = await mappingStore.getProduct(anchorUuid);
+  assert.deepEqual(mapping.frozenProjection, plan.styles[0].frozenProjection);
+  assert.notEqual(digest(mapping.frozenProjection), digest(plan.styles[0].frozenProjection), 'fixture must reorder actual nested persisted keys');
+  assert.equal(mapping.auditStructureSha256, plan.styles[0].auditStructureSha256);
+  assert.equal(mapping.adoptionPlanSha256, plan.preparedSha256);
+  const before = protectedProduct(client.state[0]), calls = client.calls.length;
+  await verifyPriceIdentity({ client, mapping, style: snapshot.styles[0], mappingStore });
+  assert.equal((await adopter.apply(plan, { reviewedSha256: plan.preparedSha256 })).existing, 1);
+  assert.equal(client.calls.slice(calls).some((call) => call.options.kind === 'mutation'), false);
+  const importer = createCatalogImporter({ client, mappingStore, mediaRoot: 'never-read-for-adopted-price-only' });
+  assert.equal((await importer.importSnapshot(snapshot, { apply: true })).changedPrices, 2);
+  assert.deepEqual(protectedProduct(client.state[0]), before);
+  assert.equal((await importer.importSnapshot(snapshot, { apply: true })).changedPrices, 0);
+});
+
+test('JSONB key-order tolerance still rejects changed nested values and reordered selected-option arrays', async () => {
+  const { adopter, plan, client, mappingStore, snapshot } = adoptionFixture({ repositoryRoundTrip: jsonbRoundTrip });
+  await adopter.apply(plan, { reviewedSha256: plan.preparedSha256 });
+  const mapping = await mappingStore.getProduct(anchorUuid);
+  await verifyPriceIdentity({ client, mapping, style: snapshot.styles[0] });
+  client.state[0].variants[0].inventoryItem.tracked = true;
+  await assert.rejects(verifyPriceIdentity({ client, mapping, style: snapshot.styles[0] }), /projection drift/);
+  client.state[0].variants[0].inventoryItem.tracked = false;
+  client.state[0].variants[0].selectedOptions.reverse();
+  await assert.rejects(verifyPriceIdentity({ client, mapping, style: snapshot.styles[0] }), /projection drift/);
 });
 
 test('prepare independently reads current native-USD catalog, exact proposal and global owners without writing', async () => {
@@ -506,6 +545,21 @@ test('worker price handler independently verifies current native identity and wr
   assert.ok(pool.queries.some((query) => query.sql.includes('product_attribute_value_index')));
   const repeatCount = client.calls.length;
   await applyPriceIntent(row, { client, pool, mappingStore });
+  assert.equal(client.calls.slice(repeatCount).some((call) => call.options.kind === 'mutation'), false);
+});
+
+test('JSONB-reloaded mappings and outbox payloads support price-only enqueue, apply and no-write repeat', async () => {
+  const { client, pool, row, mappingStore } = await workerFixture({ repositoryRoundTrip: jsonbRoundTrip });
+  assert.deepEqual(await enqueuePriceChanges(pool), { queued: 1 });
+  const persistedRow = { ...row, payload: jsonbRoundTrip(pool.outbox[0].payload) };
+  client.persistedPriceIntent = structuredClone(persistedRow.payload);
+  const before = protectedProduct(client.state[0]), callCount = client.calls.length;
+  await applyPriceIntent(persistedRow, { client, pool, mappingStore });
+  assert.deepEqual(client.state[0].variants.map((variant) => variant.price), ['15.99', '15.99']);
+  assert.deepEqual(protectedProduct(client.state[0]), before);
+  assert.deepEqual(client.calls.slice(callCount).filter((call) => call.options.kind === 'mutation').map((call) => call.operation), ['BridgePrices']);
+  const repeatCount = client.calls.length;
+  await applyPriceIntent(persistedRow, { client, pool, mappingStore });
   assert.equal(client.calls.slice(repeatCount).some((call) => call.options.kind === 'mutation'), false);
 });
 

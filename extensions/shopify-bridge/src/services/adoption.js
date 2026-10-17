@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { UnknownMutationOutcomeError } from './shopifyClient.js';
 
 export const ADOPTED_PRICE_ONLY = 'adopted-price-only-v1';
@@ -170,7 +171,8 @@ export async function verifyPriceIdentity({ client, mapping, style = null, mappi
     const live = product.variants.find(row => row.sku === variant.sku);
     assert(live?.id === variant.variantGid && live.inventoryItem?.id === variant.inventoryItemGid, 'Live Shopify variant/inventory identifiers differ');
   }
-  if (mapping.mode === ADOPTED_PRICE_ONLY) assert(adoptionHash(priceIdentityProjection(product)) === adoptionHash(mapping.frozenProjection), 'Adopted Shopify projection drift requires review');
+  // JSONB persistence can reorder object keys; arrays and values remain exact.
+  if (mapping.mode === ADOPTED_PRICE_ONLY) assert(isDeepStrictEqual(priceIdentityProjection(product), mapping.frozenProjection), 'Adopted Shopify projection drift requires review');
   await assertGlobalSkuOwnership({ client, style: source, productId: mapping.productGid });
   await assertGlobalSourceOwnership({ client, sourceUuid: mapping.sourceUuid, productId: mapping.productGid });
   return product;
