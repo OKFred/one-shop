@@ -1,0 +1,25 @@
+shusha-gallery-autoplay:not([hidden]) {
+  display: flex;
+  justify-content: center;
+  margin: 1.2rem 0;
+}
+
+.shusha-gallery-autoplay__button {
+  min-height: 44px;
+  padding: 0.8rem 1.6rem;
+  border: 1px solid rgba(var(--color-foreground), 0.35);
+  border-radius: var(--buttons-radius);
+  color: rgb(var(--color-foreground));
+  background: rgb(var(--color-background));
+  font: inherit;
+  cursor: pointer;
+}
+
+.shusha-gallery-autoplay__button:hover {
+  border-color: rgb(var(--color-foreground));
+}
+
+.shusha-gallery-autoplay__button:focus-visible {
+  outline: 2px solid rgb(var(--color-foreground));
+  outline-offset: 3px;
+}
