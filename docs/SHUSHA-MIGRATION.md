@@ -45,7 +45,7 @@ data, images, environment files and receiving instructions are mounted at runtim
 
 Price synchronization reads supplier LKR prices, recreates the source site's
 two-decimal Resale USD display value, and stores it as admin source price.
-Customers and newly created orders use the common 1.1 / upward .99 policy.
+Customers and newly created orders use the common 1.5 / upward .99 policy.
 Historical orders are immutable. API stock is diagnostic only.
 
 ## Final switch

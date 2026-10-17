@@ -52,7 +52,7 @@ catalog price writes use the authenticated backend adapter
 `scripts/shusha-sync-prices.mjs`; the old `suusha-source.cjs --sync-prices` option
 delegates to it and cannot fall back to the legacy catalog writer. Historical
 orders are never repriced. The storefront/cart/new-order retail extension
-applies the configured multiplier (default `1.1`) and the smallest `.99` at or
+applies the configured multiplier (default `1.5`) and the smallest `.99` at or
 above that exact value.
 
 ## Publish and resume

@@ -16,9 +16,9 @@ const image = { sha256: imageHash, localPath: `media/source-library/${imageHash}
 function fixture() {
   const style = { sourceId: 'L1001', sourceUuid: anchorUuid, handle: 'l1001', category: 'dresses', title: 'Synthetic Dress', descriptionHtml: '<p>Synthetic description</p>',
     seo: { title: 'Synthetic Dress', description: 'Synthetic only' }, canonicalPath: '/dresses/l1001', publishedAt: '2026-10-01T02:00:00Z', images: [image],
-    variants: [{ uuid: anchorUuid, sku: 'SHUSHA-L1001', sourceVariantSku: 'SRC-RED-S', color: 'Red', size: 'S', sourceUsd: '10.00', retailUsd: '11.99', remainingCapacity: 17, imageHashes: [imageHash] },
-      { uuid: secondUuid, sku: 'SHUSHA-L1001-V-SRC-BLUE-M', sourceVariantSku: 'SRC-BLUE-M', color: 'Blue', size: 'M', sourceUsd: '10.00', retailUsd: '11.99', remainingCapacity: -2, imageHashes: [imageHash] }] };
-  return sign({ schemaVersion: 1, currency: 'USD', pricePolicy: 'source-resale-usd-times-1.1-ceiling-.99', capturedAt: '2026-10-10T01:00:00Z', styles: [style] });
+    variants: [{ uuid: anchorUuid, sku: 'SHUSHA-L1001', sourceVariantSku: 'SRC-RED-S', color: 'Red', size: 'S', sourceUsd: '10.00', retailUsd: '15.99', remainingCapacity: 17, imageHashes: [imageHash] },
+      { uuid: secondUuid, sku: 'SHUSHA-L1001-V-SRC-BLUE-M', sourceVariantSku: 'SRC-BLUE-M', color: 'Blue', size: 'M', sourceUsd: '10.00', retailUsd: '15.99', remainingCapacity: -2, imageHashes: [imageHash] }] };
+  return sign({ schemaVersion: 1, currency: 'USD', pricePolicy: 'source-resale-usd-times-1.5-ceiling-.99', capturedAt: '2026-10-10T01:00:00Z', styles: [style] });
 }
 function sign(snapshot) { const { contentSha256, ...value } = snapshot; return { ...value, contentSha256: hash(JSON.stringify(value)) }; }
 function repository() {
@@ -49,7 +49,7 @@ function fakeClient(snapshot, { currency = 'USD', dropDraft = false, failFile = 
       if (operation === 'BridgeDraft') {
         assert.equal(variables.input.status, 'DRAFT'); assert.equal(file?.id, variables.input.files[0].id);
         assert.equal(variables.input.variants.length, 2); assert.equal('inventoryQuantities' in variables.input.variants[0], false); assert.equal('remainingCapacity' in variables.input.variants[0], false);
-        assert.equal(variables.input.variants[0].file.id, file.id); assert.equal(variables.input.variants[0].price, '11.99');
+        assert.equal(variables.input.variants[0].file.id, file.id); assert.equal(variables.input.variants[0].price, '15.99');
         product = remote(snapshot.styles[0]); if (missingVariantMedia) product.variants.nodes[1].media.nodes = [];
         if (dropDraft) throw new UnknownMutationOutcomeError(); return { productSet: { product, userErrors: [] } };
       }
@@ -97,8 +97,10 @@ async function originals(t) {
   await fs.writeFile(path.join(root, `${imageHash}.png`), png); return root;
 }
 
-test('source USD reuses exact retail boundary rule; native editor HTML removes scripts, attributes and unsafe links', () => {
-  assert.equal(retailUsd('0.90'), '0.99'); assert.equal(retailUsd('0.9001'), '1.99'); assert.equal(retailUsd('10'), '11.99'); assert.equal(retailUsd('9.99'), '10.99');
+test('source USD uses the exact 1.5 retail boundary; native editor HTML removes scripts, attributes and unsafe links', () => {
+  assert.equal(retailUsd('0.66'), '0.99'); assert.equal(retailUsd('0.6601'), '1.99');
+  assert.equal(retailUsd('1.3266'), '1.99'); assert.equal(retailUsd('1.3267'), '2.99');
+  assert.equal(retailUsd('10'), '15.99'); assert.equal(retailUsd('9.99'), '14.99');
   assert.throws(() => retailUsd('0')); assert.throws(() => retailUsd('NaN'));
   const description = JSON.stringify([{ columns: [{ data: { blocks: [{ type: 'raw', data: { html: '<p onclick="bad()">Safe<script>unsafe()</script><a href="javascript:bad()">text</a></p>' } }] } }] }]);
   assert.equal(safeDescription(description), '<p>Safe<a>text</a></p>');
@@ -110,6 +112,15 @@ test('private catalog tampering, duplicate true variants and price drift are ref
   const altered = structuredClone(snapshot); altered.styles[0].variants[0].retailUsd = '10.00'; assert.throws(() => validateCatalogSnapshot(altered), /hash/);
   assert.throws(() => validateCatalogSnapshot(sign(altered)), /price\/image/);
   const duplicate = fixture(); duplicate.styles[0].variants[1].color = 'Red'; duplicate.styles[0].variants[1].size = 'S'; assert.throws(() => validateCatalogSnapshot(sign(duplicate)), /Duplicate real/);
+});
+
+test('a correctly signed previous 1.1 catalog policy is refused before any transport', async () => {
+  const legacy = fixture(); legacy.pricePolicy = 'source-resale-usd-times-1.1-ceiling-.99';
+  for (const variant of legacy.styles[0].variants) variant.retailUsd = '11.99';
+  const snapshot = sign(legacy), repo = repository(), client = fakeClient(snapshot);
+  await assert.rejects(createCatalogImporter({ client, mappingStore: repo, mediaRoot: 'unused-synthetic-path' })
+    .importSnapshot(snapshot, { apply: true }), /Unsupported catalog snapshot/);
+  assert.equal(client.calls.length, 0); assert.equal(repo.products.size, 0); assert.equal(repo.operations.size, 0);
 });
 
 test('original local media is hash verified and rejects changed bytes and path escape', async (t) => {
@@ -133,11 +144,30 @@ test('draft import stages verified originals, waits READY, preserves variants/SK
 test('daily catalog price followup uses only variant bulk prices and leaves native capacity/structure untouched', async (t) => {
   const snapshot = fixture(); const repo = repository(); const client = fakeClient(snapshot); const importer = createCatalogImporter({ client, mappingStore: repo, mediaRoot: await originals(t) });
   await importer.importSnapshot(snapshot, { apply: true });
-  const next = fixture(); next.styles[0].variants[0].sourceUsd = '11.00'; next.styles[0].variants[0].retailUsd = '12.99';
+  const next = fixture(); next.styles[0].variants[0].sourceUsd = '11.00'; next.styles[0].variants[0].retailUsd = '16.99';
   assert.equal((await importer.importSnapshot(sign(next), { apply: true })).changedPrices, 1);
   assert.equal(client.calls.filter((row) => row.operation === 'BridgeDraft').length, 1); assert.equal(client.calls.filter((row) => row.operation === 'BridgePrices').length, 1);
   const changedStructure = fixture(); changedStructure.styles[0].variants[0].color = 'Pink';
   await assert.rejects(importer.importSnapshot(sign(changedStructure), { apply: true }), /options\/inventory ownership/);
+});
+
+test('existing 1.1 prices move to 1.5 by price-only writes while source USD, capacity and mappings stay unchanged', async (t) => {
+  const snapshot = fixture(), originalSnapshot = structuredClone(snapshot), repo = repository(), client = fakeClient(snapshot);
+  const importer = createCatalogImporter({ client, mappingStore: repo, mediaRoot: await originals(t) });
+  await importer.importSnapshot(snapshot, { apply: true });
+  for (const variant of client.product.variants.nodes) variant.price = '11.99';
+  for (const variant of repo.products.get(anchorUuid).variants) variant.price = '11.99';
+  const originalMapping = structuredClone(repo.products.get(anchorUuid)), originalOperations = structuredClone(repo.operations);
+  const callCount = client.calls.length;
+  const result = await importer.importSnapshot(snapshot, { apply: true });
+  assert.equal(result.draftsCreated, 0); assert.equal(result.changedPrices, 2);
+  assert.deepEqual(client.calls.slice(callCount).filter(call => call.options?.kind === 'mutation').map(call => call.operation), ['BridgePrices']);
+  assert.deepEqual(client.product.variants.nodes.map(variant => variant.price), ['15.99', '15.99']);
+  assert.equal(repo.products.size, 1); assert.equal(client.levels.size, 0);
+  assert.deepEqual(repo.products.get(anchorUuid), originalMapping); assert.deepEqual(repo.operations, originalOperations);
+  assert.deepEqual(snapshot, originalSnapshot);
+  assert.equal((await importer.importSnapshot(snapshot, { apply: true })).changedPrices, 0);
+  assert.equal(client.calls.slice(callCount).filter(call => call.operation === 'BridgePrices').length, 1);
 });
 
 test('all variant original-image associations are read back and missing association is added once', async (t) => {
