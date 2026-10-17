@@ -23,6 +23,21 @@ Import is a local dry-run by default. Applied import checks Shopify's native cur
 
 Phase-three `--apply --activate-inventory` additionally requires `SHOPIFY_INVENTORY_ACTIVATION_ENABLED=true`, an approved `SHOPIFY_LOCATION_ID`, and inventory scopes. Activation only accepts owned mapped drafts. It persists the original UUID idempotency key, activates a missing native inventory level at Shopify's zero default without sending quantities, and checks native item/location ownership. Existing levels are never overwritten. Unknown retries use the same request within the provider window; unresolved near-expiry requests pause for merchant review. Shared-capacity opening remains a separate transaction and outbox process.
 
+### Existing products: reviewed price-only adoption
+
+An existing manually imported catalog uses a separate `adopted-price-only-v1` mode. Begin with a successful private read-only audit of the current native reviewed catalog and the complete Shopify catalog, including global SKU/UUID collisions, exact variant/options/IDs, media and inventory readbacks. Keep jobs and all inventory/publication/content/payment/order capabilities disabled. Prepare from that original private proposal, review the returned plan, then apply its exact hash:
+
+```sh
+node scripts/shopify/adopt-existing.mjs --proposal ORIGINAL_PRIVATE_AUDIT_PROPOSAL
+node scripts/shopify/adopt-existing.mjs --apply --plan ORIGINAL_PRIVATE_PLAN --reviewed-sha256 REVIEWED_SHA256
+```
+
+Adoption preserves each existing ACTIVE/DRAFT status, handle/link, merchant metadata, images, variant associations and stock. Its only provider mutation is a missing `shusha_bridge.source_uuid` metafield with `compareDigest:null`; exact readback precedes the durable mapping. Uncertain outcomes retain their original plan/intent and require original-result readback, never a new product or blind CAS retry. Filename/image association evidence alone does not establish remote original-image bytes or visual acceptance.
+
+Subsequent price intents bind the captured source USD and mapping hash, verify current native UUID/SKU/real options, then independently verify live Shopify ownership, global SKU/UUID uniqueness and frozen variant/inventory/media/metadata identity before an `id`/`price`-only mutation and readback. Legitimate order-consumed quantities are excluded from the frozen price identity and never replenished. Older mappings without source UUID, per-variant UUID, colour and size fail closed and require revalidation. A missing new-style mapping checks global SKUs before any upload or DRAFT creation.
+
+This mode is an alternative to deployment step 3's new-DRAFT import, not evidence that a new-DRAFT upload, shared inventory, checkout, payments or publication passed actual provider acceptance. Existing products must not be routed through full `productSet` replacement or silently upgraded into those later capabilities. Core exports, schema and dependencies are unchanged.
+
 The existing minute worker can call `createCatalogFollower(runtime)`. It reads current completed publication plans and original-image manifests, imports newly published source styles as drafts, and optionally activates their reviewed inventory location. READY unpublished source materials never enter this snapshot. Automatic channel publication requires all of `SHOPIFY_CATALOG_PUBLICATION_ENABLED`, `SHOPIFY_SHARED_CAPACITY_ENABLED`, and `SHOPIFY_PAYMENT_OPERATIONS_ENABLED`, plus approved location/publication IDs. Every SKU must have a reconciled opening balance, no pending inventory writes, exact native/central/debt projection and matching remote quantity before ACTIVE/channel publication. Those writes are journaled and read back; unknown outcomes are paused until their original result is visible.
 
 Native Shopify prices are the exact shared retail calculation: source Resale USD × 1.5, rounded up to the smallest `.99`. EverShop native prices remain source USD. Repeated mapped imports use `productVariantsBulkUpdate` with only `id` and `price`; they refuse structural replacement. No import writes inventory quantities, historical orders, receiving details or customer data. Catalog changes beyond prices need a separately reviewed structural operation. Publication, shared-capacity opening and accepting Shopify orders remain gated by their later batches.

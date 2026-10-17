@@ -42,7 +42,11 @@ export function createRepositories(pool) {
     getProduct: key => get('product', key), saveProduct: (key, row) => save('product', key, row),
     getMedia: key => get('media', key), saveMedia: (key, row) => save('media', key, row),
     getOperation: key => get('operation', key), saveOperation: (key, row) => save('operation', key, row),
-    get: key => get('content', key), set: (key, row) => save('content', key, row), put: (key, row) => save('content', key, row)
+    get: key => get('content', key), set: (key, row) => save('content', key, row), put: (key, row) => save('content', key, row),
+    async listUnresolvedOperations() {
+      return (await db().query(`SELECT source_key AS key,record FROM shusha_bridge_mapping
+        WHERE kind='operation' AND record->>'status' IN ('sent','unknown') ORDER BY source_key LIMIT 1001`)).rows;
+    }
   };
   async function consumeNonce(nonce, expiresAt) {
     const result = await pool.query('INSERT INTO shusha_bridge_oauth_nonce(nonce,expires_at) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING nonce', [nonce, new Date(expiresAt)]);

@@ -4,6 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import sanitizeHtml from 'sanitize-html';
 import { normalizeRules, retailCents } from '../../../retail-pricing/src/services/pricing.js';
 import { UnknownMutationOutcomeError } from './shopifyClient.js';
+import { ADOPTED_PRICE_ONLY, assertGlobalSkuOwnership, verifyPriceIdentity } from './adoption.js';
 
 const pricing = normalizeRules({ enabled: true, multiplier: '1.5' });
 const pricePolicy = `source-resale-usd-times-${pricing.multiplier}-ceiling-.99`;
@@ -181,7 +182,7 @@ function mapProduct(style, product, media) {
   const variants = style.variants.map((variant) => {
     const node = nodes.find((value) => value.sku === variant.sku);
     assert(node && node.selectedOptions.length === 2 && node.selectedOptions.some((value) => value.name === 'Color' && value.value === variant.color) && node.selectedOptions.some((value) => value.name === 'Size' && value.value === variant.size) && /^gid:\/\/shopify\/InventoryItem\/\d+$/.test(node.inventoryItem?.id), 'Shopify SKU/options/inventory ownership differs');
-    return { uuid: variant.uuid, sku: variant.sku, variantGid: node.id, inventoryItemGid: node.inventoryItem.id, price: String(node.price), imageHashes: variant.imageHashes };
+    return { uuid: variant.uuid, sku: variant.sku, color: variant.color, size: variant.size, variantGid: node.id, inventoryItemGid: node.inventoryItem.id, price: String(node.price), imageHashes: variant.imageHashes };
   });
   return { productGid: product.id, sourceUuid: style.sourceUuid, handle: style.handle, structureSha256: structuralHash(style), variants };
 }
@@ -295,11 +296,32 @@ export function createCatalogImporter({ client, mappingStore, mediaRoot, now = D
       for (const style of snapshot.styles) {
         results.push(await mappingStore.withLock(`product:${style.sourceUuid}`, async () => {
           const saved = await mappingStore.getProduct(style.sourceUuid);
+          if (saved?.mode === ADOPTED_PRICE_ONLY) {
+            const product = await verifyPriceIdentity({ client, mapping: saved, style, mappingStore });
+            const variants = style.variants.flatMap(variant => {
+              const mapped = saved.variants.find(row => row.sku === variant.sku);
+              const current = product.variants.find(row => row.id === mapped.variantGid);
+              return Number(current.price) === Number(variant.retailUsd) ? [] : [{ id: mapped.variantGid, price: variant.retailUsd }];
+            });
+            if (variants.length) {
+              const input = { productId: saved.productGid, variants };
+              await operation(`adopt-price:${style.sourceUuid}:${hash(JSON.stringify(input))}`, input, async () => {
+                const response = await client.request(updatePrices, input, { kind: 'mutation' });
+                userErrors(response.productVariantsBulkUpdate, 'adopted price update');
+                const after = await verifyPriceIdentity({ client, mapping: saved, style });
+                assert(variants.every(row => after.variants.some(current => current.id === row.id && Number(current.price) === Number(row.price))), 'Adopted price readback differs');
+                return response;
+              });
+            }
+            return { status: variants.length ? 'prices-updated' : 'unchanged', changedPrices: variants.length };
+          }
           const found = (await client.request(findProduct, { identifier: { handle: style.handle } })).productByIdentifier;
           if (saved) { assert(found, 'Mapped Shopify product is missing; refusing recreation'); return pricesOnly(style, saved, found); }
           if (found) {
             // Handles are reserved only for our explicit UUID ownership marker.
             assert(found.status === 'DRAFT', 'Unmapped Shopify product is already active; merchant review required');
+            assert(found.metafield?.value === style.sourceUuid, 'Shopify product identity belongs to another source');
+            await assertGlobalSkuOwnership({ client, style, productId: found.id });
             const recoveredMedia = new Map();
             for (const image of style.images) recoveredMedia.set(image.sha256, await ensureMedia(image));
             await ensureVariantMedia(style, found, recoveredMedia);
@@ -307,6 +329,7 @@ export function createCatalogImporter({ client, mappingStore, mediaRoot, now = D
             await mappingStore.saveProduct(style.sourceUuid, recovered);
             return pricesOnly(style, recovered, found);
           }
+          await assertGlobalSkuOwnership({ client, style });
           const media = new Map();
           for (const image of style.images) media.set(image.sha256, await ensureMedia(image));
           const productInput = {

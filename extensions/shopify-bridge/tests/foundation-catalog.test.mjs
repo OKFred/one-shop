@@ -42,6 +42,9 @@ function fakeClient(snapshot, { currency = 'USD', dropDraft = false, failFile = 
       const operation = document.match(/(?:query|mutation)\s+(\w+)/)[1]; calls.push({ operation, variables, options, document });
       if (operation === 'BridgeCurrency') return { shop: { currencyCode: currency } };
       if (operation === 'BridgeProduct') return { productByIdentifier: product };
+      if (operation === 'BridgeGlobalSku') return { productVariants: { nodes: product ? product.variants.nodes.map(variant => ({
+        id: variant.id, sku: variant.sku, product: { id: product.id, handle: product.handle }
+      })) : [], pageInfo: { hasNextPage: false, endCursor: null } } };
       if (operation === 'BridgeFiles') return { files: { nodes: file ? [file] : [] } };
       if (operation === 'BridgeStage') return { stagedUploadsCreate: { stagedTargets: [{ url: 'https://shopify-staged-uploads.storage.googleapis.com/', resourceUrl: 'https://storage.googleapis.com/synthetic-original', parameters: [] }], userErrors: [] } };
       if (operation === 'BridgeFile') { assert.equal(stagedUploads, 1); file = { id: 'gid://shopify/MediaImage/1', fileStatus: 'PROCESSING' }; return { fileCreate: { files: [file], userErrors: [] } }; }
