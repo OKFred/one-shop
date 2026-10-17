@@ -48,3 +48,39 @@ Focused synthetic SSR verifies those native contracts after compilation:
 ```sh
 node --test tests/merchant-storefront.test.mjs
 ```
+
+The product-detail gallery uses the native component alias at
+`components/frontStore/catalog/Media.js`. It is derived from EverShop 2.2.1's
+GPLv3 `Media` and stylesheet, and preserves the named `Media` export, its three
+image-size props, public `ProductContext`/`Image`/dimension helpers, thumbnails,
+manual navigation and fullscreen images. The page query and core sources stay
+unchanged. Only the product-detail page currently consumes this alias; homepage
+CMS images and Shopify theme sections are separate.
+
+Images retain the native click-to-zoom divs with no focusable descendants in
+hidden slides or infinite-loop clones. A single 44px View larger button outside
+the slider gives keyboard users access to the current image's fullscreen view.
+It also remains available for a single-image product. No rendered DOM is patched.
+
+Two or more distinct valid image URLs rotate every five seconds after client
+mount. SSR stays on the first image. Hover, focus within the image/thumbnail
+stage, touch interaction, fullscreen viewing and a hidden browser tab pause the
+rotation. The 44px Play/Pause control sits outside that temporary-pause stage so
+explicit Play works while its button retains focus. Manual Pause survives
+native AJAX variant changes; only the Slick instance resets to the new first
+image. Fullscreen keyboard listeners and the previous body scroll/focus state
+are released by an effect, without delayed slide-position timers.
+
+Reduced-motion visitors start with rotation disabled and all transitions at
+zero duration. They may explicitly press Play; image changes remain instant.
+A later request for reduced motion disables automatic rotation again. Slick's
+own pause handlers are disabled and one merchant policy drives its imperative
+Play/Pause API, avoiding its sticky internal paused state.
+
+When updating upstream, compare the native `Media` props, product/image context,
+image sizing, Slick ref API, gallery markup/styles, modal keyboard contract and
+webpack `@components` extension resolution. `ProductGallery.scss` deliberately
+has a distinct basename from the component. Compile this extension and rebuild
+the storefront bundle before deployment. Synthetic policy/environment/SSR
+coverage lives in `tests/product-gallery.test.mjs`; real hover, focus, zoom,
+variant switching and mobile interaction still require browser verification.
