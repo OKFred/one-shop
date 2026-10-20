@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import sanitizeHtml from 'sanitize-html';
 import { normalizeRules, retailCents } from '../../../retail-pricing/src/services/pricing.js';
 import { UnknownMutationOutcomeError } from './shopifyClient.js';
@@ -263,25 +264,74 @@ export function createCatalogImporter({ client, mappingStore, mediaRoot, now = D
   }
   async function ensureVariantMedia(style, product, media, allowWrites = true) {
     const record = mapProduct(style, product, media);
-    const missing = [];
-    for (let offset = 0; offset < record.variants.length; offset += 20) {
-      const batch = record.variants.slice(offset, offset + 20);
-      const response = await client.request(getVariantMedia, { ids: batch.map((row) => row.variantGid) });
-      assert(response.nodes.length === batch.length, 'Shopify variant media readback is incomplete');
-      for (const variant of batch) {
-        const actual = response.nodes.find((row) => row?.id === variant.variantGid);
-        const expected = variant.imageHashes.map((value) => media.get(value).gid);
-        assert(actual?.media?.pageInfo?.hasNextPage === false && actual.media.nodes.every((node) => expected.includes(node.id)), 'Shopify variant has unrelated or unbounded media');
-        const absent = expected.filter((gid) => !actual.media.nodes.some((node) => node.id === gid));
-        if (absent.length) missing.push({ variantId: variant.variantGid, mediaIds: absent });
-      }
+    const structureSha256 = structuralHash(style);
+    const legacyKey = `variant-media:${style.sourceUuid}:${structureSha256}`;
+    const primaryKey = `variant-primary-media:${style.sourceUuid}:${structureSha256}`;
+    const legacy = await mappingStore.getOperation(legacyKey);
+    const primary = await mappingStore.getOperation(primaryKey);
+    assert([legacy, primary].every((value) => !value || ['sent', 'unknown', 'failed', 'complete'].includes(value.status)), 'Unrecognized variant-media journal state requires review');
+    assert(![legacy, primary].some((value) => value && ['sent', 'unknown'].includes(value.status)), 'Unresolved variant-media operation requires original-result review before primary-image recovery');
+    if (legacy?.status === 'failed') {
+      assert(product.status === 'DRAFT' && /^[a-f0-9]{64}$/.test(legacy.inputHash || '') && Array.isArray(legacy.input) &&
+        legacy.input.length > 0 && legacy.input.length <= record.variants.length, 'Legacy failed variant-media intent is not a recoverable owned draft');
+      const seen = new Set();
+      // PostgreSQL JSONB may reorder object keys. Rebuild the exact old request
+      // object shape while preserving both array orders before checking its hash.
+      const originalInput = legacy.input.map((pair) => {
+        const variant = record.variants.find((value) => value.variantGid === pair?.variantId);
+        const expected = variant?.imageHashes.map((value) => media.get(value).gid);
+        assert(variant && Object.keys(pair).sort().join(',') === 'mediaIds,variantId' && !seen.has(pair.variantId) &&
+          Array.isArray(pair.mediaIds) && pair.mediaIds.length > 0 && new Set(pair.mediaIds).size === pair.mediaIds.length &&
+          pair.mediaIds.every((value) => expected.includes(value)), 'Legacy variant-media input differs from the reviewed original gallery');
+        seen.add(pair.variantId);
+        return { variantId: pair.variantId, mediaIds: pair.mediaIds };
+      });
+      assert(hash(JSON.stringify(originalInput)) === legacy.inputHash, 'Legacy variant-media original input hash differs');
     }
-    if (!missing.length) return;
-    assert(allowWrites, 'Mapped Shopify variant original-image association changed; price-only sync refused');
-    const key = `variant-media:${style.sourceUuid}:${structuralHash(style)}`;
-    await operation(key, missing, async () => {
+    async function readPrimaryMedia() {
+      const missing = [], primaryReadback = [];
+      for (let offset = 0; offset < record.variants.length; offset += 20) {
+        const batch = record.variants.slice(offset, offset + 20);
+        const response = await client.request(getVariantMedia, { ids: batch.map((row) => row.variantGid) });
+        assert(response.nodes.length === batch.length, 'Shopify variant media readback is incomplete');
+        for (const variant of batch) {
+          const actual = response.nodes.find((row) => row?.id === variant.variantGid);
+          const expected = media.get(variant.imageHashes[0]).gid;
+          assert(actual?.media?.pageInfo?.hasNextPage === false && Array.isArray(actual.media.nodes) &&
+            actual.media.nodes.length <= 1 && actual.media.nodes.every((node) => node.id === expected), 'Shopify variant primary image differs or has unrelated/unbounded media');
+          if (actual.media.nodes.length === 0) missing.push({ variantId: variant.variantGid, mediaIds: [expected] });
+          else primaryReadback.push({ variantId: variant.variantGid, mediaId: expected });
+        }
+      }
+      return { missing, primaryReadback };
+    }
+    const { missing, primaryReadback } = await readPrimaryMedia();
+    if (!missing.length) {
+      if (legacy?.status === 'failed') {
+        const stable = (value) => Array.isArray(value) ? value.map(stable) : value && typeof value === 'object'
+          ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, stable(value[key])])) : value;
+        const key = `variant-media-resolution:${style.sourceUuid}:${legacy.inputHash}`;
+        const resolution = { kind: 'variant-primary-media-resolution', status: 'complete', policy: 'single-primary-image-v1',
+          sourceUuid: style.sourceUuid, productGid: product.id, structureSha256,
+          originalOperationKey: legacyKey, originalInputHash: legacy.inputHash, originalStatus: legacy.status,
+          originalRecordSha256: hash(JSON.stringify(stable(legacy))), primaryReadback };
+        const previous = await mappingStore.getOperation(key);
+        if (previous) {
+          const { resolvedAt, ...saved } = previous;
+          assert(Number.isFinite(Date.parse(resolvedAt)) && isDeepStrictEqual(saved, resolution), 'Primary-image resolution differs from the original failed intent or current readback');
+        } else {
+          // The old full-gallery request remains failed with its complete input.
+          // This separate result attests only to the supported primary policy.
+          await mappingStore.saveOperation(key, { ...resolution, resolvedAt: new Date(now()).toISOString() });
+        }
+      }
+      return;
+    }
+    assert(allowWrites, 'Mapped Shopify variant primary-image association changed; price-only sync refused');
+    await operation(primaryKey, missing, async () => {
       const result = await client.request(appendVariantMedia, { productId: product.id, variantMedia: missing }, { kind: 'mutation' });
-      userErrors(result.productVariantAppendMedia, 'variant original-image association');
+      userErrors(result.productVariantAppendMedia, 'variant primary-image association');
+      assert((await readPrimaryMedia()).missing.length === 0, 'Shopify variant primary-image readback differs');
       return result;
     });
     await ensureVariantMedia(style, product, media, false);
