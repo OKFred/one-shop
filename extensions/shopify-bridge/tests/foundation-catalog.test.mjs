@@ -173,7 +173,7 @@ test('existing 1.1 prices move to 1.5 by price-only writes while source USD, cap
   assert.equal(client.calls.slice(callCount).filter(call => call.operation === 'BridgePrices').length, 1);
 });
 
-test('all variant original-image associations are read back and missing association is added once', async (t) => {
+test('each variant primary-image association is read back and a missing association is added once', async (t) => {
   const snapshot = fixture(); const repo = repository(); const client = fakeClient(snapshot, { missingVariantMedia: true });
   const importer = createCatalogImporter({ client, mappingStore: repo, mediaRoot: await originals(t) });
   await importer.importSnapshot(snapshot, { apply: true });
