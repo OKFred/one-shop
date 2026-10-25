@@ -49,6 +49,40 @@ Focused synthetic SSR verifies those native contracts after compilation:
 node --test tests/merchant-storefront.test.mjs
 ```
 
+## Wholesale enquiries
+
+The extension owns the native GET route `/wholesale`; it does not require a CMS
+page, URL-rewrite insertion, database migration or customer/lead table. Before
+deploying, check that the merchant has not independently created a conflicting
+`/wholesale` route or CMS rewrite. The footer links to the page. Compile the
+extension and rebuild the storefront bundle for the new route and styles.
+
+Country choices use the native public `countries` GraphQL query. The receiving
+WhatsApp URL and contact card come only from the existing public runtime company
+profile. Missing or invalid Sri Lanka support configuration keeps the form
+unavailable instead of inventing receiving/contact information.
+
+The enquiry form is client-only: inputs are disabled in SSR until its handlers
+are mounted, validation never sends a request to the store, and the submit action
+opens a WhatsApp draft on a user gesture. The customer reviews that draft and
+presses Send in WhatsApp. If the popup is blocked a normal outbound draft link is
+shown. No order, payment link, analytics pixel, cookie or customer database record
+is created. Safe bounded `utm_source`, `utm_medium` and `utm_content` identifiers
+may be included in the draft with `wholesale_pilot`; this is an enquiry source
+label, not order-level attribution. Typed enquiry details never become store URL
+parameters. Retail price calculation and manual payment services are unchanged.
+
+Run the synthetic validation, route-discovery, GraphQL and SSR checks after
+compilation:
+
+```sh
+node --test tests/wholesale-inquiry.test.mjs tests/merchant-storefront.test.mjs
+```
+
+Browser acceptance still needs desktop/mobile layout, keyboard/error focus,
+missing-contact behavior and a blocked/normal popup flow. Intercept the outbound
+WhatsApp URL during automated tests; do not send a real enquiry as a test.
+
 The product-detail gallery uses the native component alias at
 `components/frontStore/catalog/Media.js`. It is derived from EverShop 2.2.1's
 GPLv3 `Media` and stylesheet, and preserves the named `Media` export, its three

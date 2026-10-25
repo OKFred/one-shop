@@ -1,0 +1,5 @@
+{
+  "methods": ["GET"],
+  "path": "/wholesale",
+  "name": "SHUSHA wholesale enquiries"
+}

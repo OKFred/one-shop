@@ -12,7 +12,7 @@ export default function MerchantFooter({ publicMerchantProfile }) {
       </div>
       <nav className="shusha-footer-nav" aria-label="Shop collections">
         <h2>Explore</h2>
-        <a href="/dresses">Dresses</a><a href="/tops">Tops</a><a href="/pants">Pants</a>
+        <a href="/dresses">Dresses</a><a href="/tops">Tops</a><a href="/pants">Pants</a><a href="/wholesale">Wholesale enquiries</a>
       </nav>
       <nav className="shusha-footer-nav" aria-label="Customer information">
         <h2>About your order</h2>
