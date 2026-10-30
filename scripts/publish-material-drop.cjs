@@ -5,6 +5,8 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { isDeepStrictEqual } = require('node:util');
+const { acquirePublicationLocks, cleanupPublicationLocks, hasPublicationLocks } = require('./lib/material-publication-locks.cjs');
+const { waitForCanonicalProductUrl } = require('./lib/material-publication-urls.cjs');
 const ROOT = process.cwd();
 const PRIVATE_DATA = path.resolve(process.env.PRIVATE_DATA_DIR || path.join(ROOT, 'data'));
 const LIBRARY = path.resolve(process.env.MATERIAL_LIBRARY_DIR || path.join(PRIVATE_DATA, 'material-library'));
@@ -390,8 +392,7 @@ async function verifyStyle(client, plan, targets, groupId) {
     assert(values.length === 2 && values.some((value) => value.attribute_code === ATTRIBUTES[0].code && value.option_text === variant.color) && values.some((value) => value.attribute_code === ATTRIBUTES[1].code && value.option_text === variant.size), `Actual color/size mapping differs for ${variant.storeSku}`);
     const images = (await client.query('SELECT * FROM product_image WHERE product_image_product_id=$1', [row.product_id])).rows;
     assert(images.length === variant.images.length && images.filter((image) => image.is_main).length === 1 && variant.images.every((asset) => images.some((image) => image.origin_image === asset.assetUrl)), `Native image gallery differs for ${variant.storeSku}`);
-    const urls = (await client.query('SELECT request_path,target_path FROM url_rewrite WHERE entity_uuid=$1 AND entity_type=$2', [row.uuid, 'product'])).rows;
-    assert(urls.some((url) => url.request_path === `/${CATEGORIES[plan.category]}/${variant.storeUrlKey}` && url.target_path === `/product/${row.uuid}`), `Public variant URL differs for ${variant.storeSku}`);
+    await waitForCanonicalProductUrl(client, { uuid: row.uuid, requestPath: `/${CATEGORIES[plan.category]}/${variant.storeUrlKey}`, sku: variant.storeSku });
     assert((await client.query('SELECT 1 FROM product_collection WHERE product_id=$1 AND collection_id=$2', [row.product_id, targets.collectionId])).rows.length === 1, `Managed collection link missing: ${variant.storeSku}`);
   }
   return { sourceId: plan.sourceId, variants: rows.length, groupId };
@@ -420,6 +421,11 @@ function safeError(error) {
   for (const name of ['DB_PASSWORD', 'DATABASE_URL', 'APIKEY', 'SUUSHA_PRICE_API_KEY']) if (process.env[name]) value = value.split(process.env[name]).join('[REDACTED]');
   return value;
 }
+async function failIncompletePublicationSlot(client, options, locks, locksReady = false) {
+  if (client && locksReady === true && hasPublicationLocks(LOCKS, locks) && options.operation === 'publish-next' && options.action === 'apply' && await relationExists(client, SLOTS)) {
+    await client.query(`UPDATE ${SLOTS} SET status='failed',updated_at=now() WHERE slot=$1 AND status<>'complete'`, [options.slot]);
+  }
+}
 async function executePublication(options) {
   const data = await inputs();
   require('dotenv').config(); process.env.ALLOW_CONFIG_MUTATIONS = 'true';
@@ -429,12 +435,11 @@ async function executePublication(options) {
   const services = await createCatalogServices();
   const { pool } = services;
   pool.options.connectionTimeoutMillis = 10000;
-  let client; const locks = []; let journal; let journalPath;
+  let client; const locks = []; let journal; let journalPath; let publicationError; let locksReady = false;
   try {
     client = await pool.connect();
-    for (const name of LOCKS) {
-      assert((await client.query('SELECT pg_try_advisory_lock(hashtext($1)) AS locked', [name])).rows[0].locked, 'Another catalog publication or source price sync is running; no records changed'); locks.push(name);
-    }
+    await acquirePublicationLocks(client, LOCKS, locks);
+    locksReady = true;
     const selected = await selectPlans(client, data, options);
     const assetCount = await verifyAssets(selected.plans);
     const targets = await preflight(client, selected.plans);
@@ -487,12 +492,12 @@ async function executePublication(options) {
     journal.result = result; journal.finishedAt = new Date().toISOString(); await atomicJson(journalPath, journal);
     console.log(JSON.stringify({ status: journal.status, ...result, snapshotPath, journalPath }, null, 2));
   } catch (error) {
+    publicationError = error;
     if (journal) { journal.status = 'failed'; journal.error = safeError(error); journal.finishedAt = new Date().toISOString(); await atomicJson(journalPath, journal); }
-    if (client && options.operation === 'publish-next' && options.action === 'apply' && await relationExists(client, SLOTS)) await client.query(`UPDATE ${SLOTS} SET status='failed',updated_at=now() WHERE slot=$1 AND status<>'complete'`, [options.slot]);
+    await failIncompletePublicationSlot(client, options, locks, locksReady);
     throw error;
   } finally {
-    if (client) { for (const name of locks.reverse()) await client.query('SELECT pg_advisory_unlock(hashtext($1))', [name]); client.release(); }
-    await pool.end();
+    await cleanupPublicationLocks(client, locks, pool, publicationError);
   }
 }
 
@@ -519,5 +524,5 @@ async function main() {
   }
 }
 
-module.exports = { parseArguments, validateSlot, assertPublicationBatch, normalizedStyle, categoryFor, localAsset, mapPath, verifyAssets, selectPlans, invokeNativeController };
+module.exports = { parseArguments, validateSlot, assertPublicationBatch, normalizedStyle, categoryFor, localAsset, mapPath, verifyAssets, selectPlans, invokeNativeController, failIncompletePublicationSlot, verifyStyle };
 if (require.main === module) main().catch((error) => { console.error(`Material publication failed: ${safeError(error)}`); process.exitCode = 1; });

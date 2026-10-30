@@ -75,6 +75,42 @@ entities; a narrow owned SQL adapter handles variant group membership and
 canonical URL rewrites because the native REST controllers are not public
 package exports. Group creation and its publication reservation commit together.
 
+The two advisory locks use one monotonic contention budget of at most 30 seconds,
+with nonblocking attempts in the same order. A transient catalog snapshot or
+price-sync reader can finish before publication proceeds. Waiting never reserves
+a slot or changes business records. On timeout or a lock query failure, the run
+keeps its original failure and releases only the locks acquired by its own
+session, in reverse order; it does not remove another worker's locks or retry a
+publication. Failed-slot bookkeeping is permitted only after both locks were
+acquired within the deadline; its existing predicate still excludes completed
+slots. A late successful lock response is released without changing a slot.
+
+This is a merchant adapter seam in `scripts/publish-material-drop.cjs` and
+`scripts/lib/material-publication-locks.cjs`, not an EverShop core patch. It retains
+the existing advisory-lock names/order, native v2 services, frozen slot semantics,
+job registry and schedules. Recheck the lock contract with catalog readers and
+the PostgreSQL client cleanup behavior when upgrading upstream. The contention
+deadline does not replace the database connection's transport/error handling.
+
+The merchant publisher also waits up to five seconds for each product's exact
+canonical URL during final verification, polling with read-only queries every
+100 ms. Native v2.2.1 product URL subscribers can write the owned root path
+before its category path. Missing or intermediate owned rows must settle to the
+expected category path and `/product/UUID` target; another owner or duplicate
+row is refused immediately. A timeout keeps the existing `Public variant URL
+differs` error. The publisher never repairs routes, accepts a root-path fallback,
+or changes the advisory-lock order. As with the contention budget, this polling
+deadline does not replace database transport/error handling or prevent a later
+native subscriber from changing a route after verification.
+
+This is a merchant verification seam, without core patches or a schema change.
+Recheck the native URL subscriber order and `url_rewrite.entity_uuid` uniqueness
+when upgrading upstream. Focused synthetic tests cover transient path/target
+readiness, persistent timeout, conflicting ownership and duplicates, query
+failure, and the publisher waiting for exact readiness. Run a separate
+restored-copy rehearsal before deployment and verify the live result afterward.
+Synthetic tests do not establish the ordering of a historical native event.
+
 Only new products receive request capacity `999`. Existing quantities, source
 prices, UUIDs, SKU ownership and unrelated products are checked after publication.
 Actual supplier availability, delivery cost and packing dimensions still require
