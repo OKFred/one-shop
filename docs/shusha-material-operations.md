@@ -92,6 +92,25 @@ job registry and schedules. Recheck the lock contract with catalog readers and
 the PostgreSQL client cleanup behavior when upgrading upstream. The contention
 deadline does not replace the database connection's transport/error handling.
 
+The merchant publisher also waits up to five seconds for each product's exact
+canonical URL during final verification, polling with read-only queries every
+100 ms. Native v2.2.1 product URL subscribers can write the owned root path
+before its category path. Missing or intermediate owned rows must settle to the
+expected category path and `/product/UUID` target; another owner or duplicate
+row is refused immediately. A timeout keeps the existing `Public variant URL
+differs` error. The publisher never repairs routes, accepts a root-path fallback,
+or changes the advisory-lock order. As with the contention budget, this polling
+deadline does not replace database transport/error handling or prevent a later
+native subscriber from changing a route after verification.
+
+This is a merchant verification seam, without core patches or a schema change.
+Recheck the native URL subscriber order and `url_rewrite.entity_uuid` uniqueness
+when upgrading upstream. Focused synthetic tests cover transient path/target
+readiness, persistent timeout, conflicting ownership and duplicates, query
+failure, and the publisher waiting for exact readiness. Run a separate
+restored-copy rehearsal before deployment and verify the live result afterward.
+Synthetic tests do not establish the ordering of a historical native event.
+
 Only new products receive request capacity `999`. Existing quantities, source
 prices, UUIDs, SKU ownership and unrelated products are checked after publication.
 Actual supplier availability, delivery cost and packing dimensions still require
