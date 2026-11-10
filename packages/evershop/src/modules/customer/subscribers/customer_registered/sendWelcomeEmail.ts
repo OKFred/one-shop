@@ -170,7 +170,6 @@ export default async function sendCustomerWelcomeEmail(
   data: EventData<'customer_registered'>
 ) {
   try {
-    const email = data.email;
     // Off-request (event subscriber) — resolve the store locale explicitly (D7).
     const locale = await getStoreLanguage();
     const subject = translate('Welcome to our store!', {}, locale);
@@ -180,6 +179,11 @@ export default async function sendCustomerWelcomeEmail(
     if (config?.enabled === false) {
       return;
     }
+    // Older queued events can still carry a password hash.
+    const { password: _password, ...customer } = data as typeof data & {
+      password?: string;
+    };
+    const email = customer.email;
     let template;
     if (config?.templatePath) {
       const filePath = path.join(CONSTANTS.ROOTPATH, config.templatePath);
@@ -196,7 +200,7 @@ export default async function sendCustomerWelcomeEmail(
       template = TEMPLATE;
     }
     const dynamicData = await getValue('customerWelcomeEmailData', {
-      customer: data
+      customer
     });
     const args = await getValue(
       'customerWelcomeEmailArguments',
@@ -207,7 +211,7 @@ export default async function sendCustomerWelcomeEmail(
         data: dynamicData,
         locale
       },
-      { customer: data }
+      { customer }
     );
     await sendEmail('customer_welcome', args);
   } catch (e) {

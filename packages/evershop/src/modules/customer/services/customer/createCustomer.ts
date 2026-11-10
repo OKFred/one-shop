@@ -100,10 +100,11 @@ async function createCustomer<T extends CustomerData>(data: T, context: Record<s
 
     // If status = 1, Emit event customer_registered
     // In case of status = 0, the custom extension will need to emit the event
+    const { password: _password, ...payload } = customer;
     if (parseInt(customer.status.toString(), 10) === 1) {
-      await emit('customer_registered', customer);
+      await emit('customer_registered', payload);
     } else {
-      await emit('account_created', customer);
+      await emit('account_created', payload);
     }
 
     await commit(connection);

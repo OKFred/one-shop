@@ -6,6 +6,8 @@ import {
   ProductInventoryRow,
   ProductRow
 } from './db/index.js';
+
+type CustomerEventData = Omit<CustomerRow, 'password'>;
 /**
  * Event registry that maps event names to their data types.
  * Extend this interface in your modules to register custom events.
@@ -97,27 +99,33 @@ export interface EventDataRegistry {
 
   /**
    * Fired when a new customer is registered and status = 1 (account is active)
-   * Data: Complete customer table row
+   * Data: Customer table row without password
    */
-  customer_registered: CustomerRow;
+  customer_registered: CustomerEventData;
+
+  /**
+   * Fired when a new customer account is created with status = 0
+   * Data: Customer table row without password
+   */
+  account_created: CustomerEventData;
 
   /**
    * Fired when a new customer record is added to database, regardless of the status value
-   * Data: Complete customer table row
+   * Data: Customer table row without password
    */
-  customer_created: CustomerRow;
+  customer_created: CustomerEventData;
 
   /**
    * Fired when a customer record in database is updated
-   * Data: Complete customer table row
+   * Data: Customer table row without password
    */
-  customer_updated: CustomerRow;
+  customer_updated: CustomerEventData;
 
   /**
    * Fired when a customer record is deleted
-   * Data: Complete customer table row
+   * Data: Customer table row without password
    */
-  customer_deleted: CustomerRow;
+  customer_deleted: CustomerEventData;
 
   /**
    * Fired when a new order record is created in database, regardless of the payment method or order status
