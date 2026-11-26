@@ -40,7 +40,17 @@
   elsif section.settings.media_size == 'small'
     assign media_width = 0.45
   endif
+
+  assign shusha_autoplay = false
+  if request.page_type == 'product' and section.settings.shusha_gallery_autoplay and section.settings.gallery_layout contains 'thumbnail'
+    assign shusha_autoplay = true
+  endif
 -%}
+
+{%- if shusha_autoplay -%}
+  {{ 'shusha-gallery-autoplay.css' | asset_url | stylesheet_tag }}
+  <script src="{{ 'shusha-gallery-autoplay.js' | asset_url }}" defer="defer"></script>
+{%- endif -%}
 
 <media-gallery
   id="MediaGallery-{{ section.id }}"
@@ -50,6 +60,7 @@
   {% endif %}
   aria-label="{{ 'products.product.media.gallery_viewer' | t }}"
   data-desktop-layout="{{ section.settings.gallery_layout }}"
+  {% if shusha_autoplay %}data-shusha-gallery-autoplay{% endif %}
 >
   <div id="GalleryStatus-{{ section.id }}" class="visually-hidden" role="status"></div>
   <slider-component id="GalleryViewer-{{ section.id }}" class="slider-mobile-gutter">
@@ -154,6 +165,13 @@
       </button>
     </div>
   </slider-component>
+  {%- if shusha_autoplay -%}
+    <shusha-gallery-autoplay hidden>
+      <button type="button" class="shusha-gallery-autoplay__button" aria-controls="Slider-Gallery-{{ section.id }}" aria-pressed="false">
+        Play slideshow
+      </button>
+    </shusha-gallery-autoplay>
+  {%- endif -%}
   {%- if first_3d_model -%}
     <button
       class="button button--full-width product__xr-button"
