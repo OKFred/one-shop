@@ -5,7 +5,9 @@ const INVOICE_ID = /^INV2(?:-[A-Z0-9]{4}){4}$/;
 export function paypalInvoiceEnvironment() {
   const mode = process.env.SHUSHA_PAYPAL_ENV;
   if (mode === 'live') return mode;
-  if (mode === 'sandbox' && process.env.DB_NAME !== 'shusha_v2_production' && process.env.NODE_ENV !== 'production') return mode;
+  // Restored test copies also run the production build.
+  if (mode === 'sandbox' && /(?:^|[_-])(?:test|sandbox|candidate|integration)(?:[_-]|$)/i.test(process.env.DB_NAME || '') &&
+      !/(?:^|[_-])(?:prod|production)(?:[_-]|$)/i.test(process.env.DB_NAME)) return mode;
   return null;
 }
 

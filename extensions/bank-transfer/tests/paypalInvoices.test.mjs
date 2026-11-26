@@ -52,6 +52,10 @@ test('Only the explicitly selected, configured provider environment becomes avai
   process.env.DB_NAME = 'other';
   process.env.NODE_ENV = 'production';
   assert.equal(paypalInvoicesEnabled(), false);
+  process.env.DB_NAME = 'shusha_paypal_candidate';
+  assert.equal(paypalInvoicesEnabled(), true);
+  process.env.DB_NAME = 'shusha_v2_production';
+  assert.equal(paypalInvoicesEnabled(), false);
   process.env.SHUSHA_PAYPAL_ENV = 'live';
   assert.equal(paypalInvoicesEnabled(), true);
   assert.throws(() => verifyPayableInvoice(invoice(), quote), /buyer invoice link/);

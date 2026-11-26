@@ -11,7 +11,7 @@ export async function testPaypalQuoteLifecycle({ pool, paypalOrder, alternateOrd
   const { default: openInvoice } = await import('../dist/pages/frontStore/bankTransferPaypalInvoice/index.js');
   const { default: paymentPrivacy } = await import('../dist/pages/frontStore/bankTransferPaypalInvoice/paymentPrivacy[index].js');
   const env = {
-    NODE_ENV: 'test', SHUSHA_PAYPAL_ENV: 'sandbox', SHUSHA_PAYPAL_INVOICES_ENABLED: '1',
+    SHUSHA_PAYPAL_ENV: 'sandbox', SHUSHA_PAYPAL_INVOICES_ENABLED: '1',
     SHUSHA_PAYPAL_MERCHANT_EMAIL: 'merchant@example.invalid',
     PAYPAL_CLIENT_ID: crypto.randomUUID(), PAYPAL_SECRET: crypto.randomUUID()
   };
