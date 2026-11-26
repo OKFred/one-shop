@@ -91,6 +91,12 @@ test('Payable invoice requires the current reference, amount, currency, merchant
   for (const status of ['UNPAID', 'SENT', 'SHARED']) {
     assert.equal(verifyPayableInvoice({ ...invoice(), status }, quote), link);
   }
+  const fixedPrice = invoice();
+  fixedPrice.configuration = { allow_only_pay_by_bank: false };
+  fixedPrice.effective_invoice_total = amount();
+  fixedPrice.effective_due_amount = amount();
+  fixedPrice.detail.payment_term = { conditional_rules: { auto_cancellation: { is_applied: false } } };
+  assert.equal(verifyPayableInvoice(fixedPrice, quote), link);
   for (const mutate of [
     i => { i.detail.reference = 'SHUSHA-10004-R1'; },
     i => { i.detail.reference = 'SHUSHA-10005-R2'; },
@@ -98,9 +104,16 @@ test('Payable invoice requires the current reference, amount, currency, merchant
     i => { i.amount.currency_code = 'GBP'; },
     i => { i.detail.currency_code = 'GBP'; },
     i => { i.due_amount.value = '11.99'; },
+    i => { i.effective_invoice_total = { ...amount(), value: '13.00' }; },
+    i => { i.effective_due_amount = { ...amount(), value: '11.99' }; },
+    i => { i.effective_due_amount = { ...amount(), currency_code: 'EUR' }; },
+    i => { i.effective_invoice_total = null; },
     i => { i.amount.value = '12.991'; },
     i => { i.configuration = { allow_tip: true }; },
+    i => { i.configuration = { allow_only_pay_by_bank: true }; },
     i => { i.configuration = { has_conditional_rule: true }; },
+    i => { i.detail.payment_term = { conditional_rules: { early_payment_discount: { percent: '10' } } }; },
+    i => { i.detail.payment_term = { conditional_rules: { late_payment_surcharge: { amount: amount() } } }; },
     i => { i.configuration = { payment_method_overrides: [{ payment_method_type: 'ACH', enabled: true }] }; },
     i => { i.configuration = { partial_payment: { allow_partial_payment: true } }; },
     i => { i.gratuity = amount(); },
@@ -140,6 +153,10 @@ test('Manual receipt requires one provider payment matching the full quoted amou
     payments: { paid_amount: amount(), transactions: [{ type: 'PAYPAL', payment_id: receipt, method: 'PAYPAL', amount: amount() }] }
   });
   assert.equal(verifyPaidInvoice(paid(), quote, receipt), true);
+  const paidWithEffectiveTotals = paid();
+  paidWithEffectiveTotals.effective_invoice_total = amount();
+  paidWithEffectiveTotals.effective_due_amount = { currency_code: 'USD', value: '0.00' };
+  assert.equal(verifyPaidInvoice(paidWithEffectiveTotals, quote, receipt), true);
   assert.throws(() => verifyPaidInvoice(paid(), quote, 'DIFFERENT'));
   for (const mutate of [
     i => { i.status = 'MARKED_AS_PAID'; },
@@ -148,6 +165,9 @@ test('Manual receipt requires one provider payment matching the full quoted amou
     i => { i.payments.transactions.push(i.payments.transactions[0]); },
     i => { i.refunds = { refund_amount: amount() }; },
     i => { i.payments.paid_amount.currency_code = 'EUR'; },
+    i => { i.effective_invoice_total = { ...amount(), currency_code: 'JPY' }; },
+    i => { i.effective_due_amount = amount(); },
+    i => { i.effective_due_amount = { currency_code: 'EUR', value: '0.00' }; },
     i => { i.due_amount.value = '1.00'; }
   ]) {
     const result = paid();

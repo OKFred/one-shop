@@ -1,6 +1,6 @@
 
 import { camelCase } from '@evershop/evershop/lib/util/camelCase';
-import { getOrderQuote, customerUrl } from '../../../services/orderPayments.js';
+import { getOrderQuote, customerUrl, openPaypalInvoice } from '../../../services/orderPayments.js';
 import { buildUrl } from '@evershop/evershop/lib/router';
 import { paypalInvoicesEnabled } from '../../../services/paypalInvoices.js';
 import { orderAccess, authenticatedCustomerId, canonicalOrderUuid, canOpenPaypalInvoice, paypalBuyerAccess } from '../../../services/paymentAccess.js';
@@ -25,20 +25,31 @@ async function allowedOrder(context, uuid) {
 
 function paymentOrder(order, context) {
   const sid = context.sid ?? context.signedCookies?.[getConfig('system.session.cookieName', 'sid')];
+  const buyer = paypalBuyerAccess(context.customer, sid);
   return {
     orderId: order.order_id,
     uuid: order.uuid,
     orderNumber: String(order.order_number),
     paymentMethod: order.payment_method,
     paymentStatusCode: order.payment_status,
-    buyerCanOpenPaypal: canOpenPaypalInvoice(order, paypalBuyerAccess(context.customer, sid))
+    paypalAccess: canOpenPaypalInvoice(order, buyer) ? buyer : null
   };
 }
 
 async function paymentQuote(order, pool) {
   const quote = await getOrderQuote(order.orderId, pool);
-  if (quote?.status === 'confirmed' && quote.paypalInvoiceLinked && quote.paypalInvoiceEnvironmentMatches && order.buyerCanOpenPaypal && paypalInvoicesEnabled()) {
-    return { ...quote, paypalPaymentUrl: buildUrl('bankTransferPaypalInvoice', { orderUuid: order.uuid, quoteRevision: String(quote.revision) }) };
+  if (quote?.status === 'confirmed' && quote.paypalInvoiceLinked && quote.paypalInvoiceEnvironmentMatches && order.paypalAccess && paypalInvoicesEnabled()) {
+    let verifiedLink;
+    return {
+      ...quote,
+      // GraphQL invokes function-valued fields only when selected. Aliases share the check.
+      paypalPaymentUrl() {
+        verifiedLink ??= openPaypalInvoice(order.uuid, quote.revision, order.paypalAccess)
+          .then(() => buildUrl('bankTransferPaypalInvoice', { orderUuid: order.uuid, quoteRevision: String(quote.revision) }))
+          .catch(() => null);
+        return verifiedLink;
+      }
+    };
   }
   return quote;
 }

@@ -82,15 +82,22 @@ function matchesAmount(amount, quote) {
 function verifyQuote(invoice, quote) {
   verifyMerchant(invoice);
   if (invoice.detail?.reference !== invoiceReference(quote) || invoice.detail.currency_code !== quote.currency ||
-      !matchesAmount(invoice.amount, quote)) throw new Error('PayPal invoice does not match this quote revision, currency and amount');
+      !matchesAmount(invoice.amount, quote) ||
+      (invoice.effective_invoice_total !== undefined && !matchesAmount(invoice.effective_invoice_total, quote))) {
+    throw new Error('PayPal invoice does not match this quote revision, currency and amount');
+  }
   const configuration = invoice.configuration;
   const allowTip = configuration?.allow_tip;
   const allowPartial = configuration?.partial_payment?.allow_partial_payment;
+  const bankOnly = configuration?.allow_only_pay_by_bank;
   const conditionalPrice = configuration?.has_conditional_rule;
+  const terms = invoice.detail.payment_term?.conditional_rules;
   const paymentMethods = configuration?.payment_method_overrides;
   const shipping = invoice.amount.breakdown?.shipping?.amount;
   if ((allowTip !== undefined && allowTip !== false) || (allowPartial !== undefined && allowPartial !== false) ||
+      (bankOnly !== undefined && bankOnly !== false) ||
       (conditionalPrice !== undefined && conditionalPrice !== false) ||
+      terms?.early_payment_discount !== undefined || terms?.late_payment_surcharge !== undefined ||
       (paymentMethods !== undefined && !(Array.isArray(paymentMethods) && paymentMethods.length === 0)) ||
       (shipping !== undefined && !isZero(shipping, quote.currency)) ||
       (invoice.gratuity !== undefined && !isZero(invoice.gratuity, quote.currency)) ||
@@ -102,6 +109,7 @@ function verifyQuote(invoice, quote) {
 export function verifyPayableInvoice(invoice, quote) {
   verifyQuote(invoice, quote);
   if (!['UNPAID', 'SENT', 'SHARED'].includes(invoice.status) || !matchesAmount(invoice.due_amount, quote) ||
+      (invoice.effective_due_amount !== undefined && !matchesAmount(invoice.effective_due_amount, quote)) ||
       !noActivity(invoice.payments, 'paid_amount', quote.currency)) throw new Error('PayPal invoice is not payable in full');
 
   const origin = paypalInvoiceEnvironment() === 'live' ? 'https://www.paypal.com' : 'https://www.sandbox.paypal.com';
@@ -128,7 +136,9 @@ export function verifyPaidInvoice(invoice, quote, receiptReference) {
   verifyQuote(invoice, quote);
   const payments = invoice.payments;
   const transaction = payments?.transactions?.[0];
-  if (invoice.status !== 'PAID' || !isZero(invoice.due_amount, quote.currency) || !matchesAmount(payments?.paid_amount, quote) ||
+  if (invoice.status !== 'PAID' || !isZero(invoice.due_amount, quote.currency) ||
+      (invoice.effective_due_amount !== undefined && !isZero(invoice.effective_due_amount, quote.currency)) ||
+      !matchesAmount(payments?.paid_amount, quote) ||
       !Array.isArray(payments.transactions) || payments.transactions.length !== 1 || transaction?.type !== 'PAYPAL' ||
       typeof transaction.payment_id !== 'string' || !transaction.payment_id || transaction.payment_id !== receiptReference ||
       !matchesAmount(transaction.amount, quote)) throw new Error('PayPal could not verify a single matching payment for this quote');

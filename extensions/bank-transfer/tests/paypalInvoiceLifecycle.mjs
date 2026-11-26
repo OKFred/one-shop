@@ -19,6 +19,7 @@ export async function testPaypalQuoteLifecycle({ pool, paypalOrder, alternateOrd
   const originalFetch = globalThis.fetch;
   const invoices = new Map();
   let reads = 0;
+  let serviceUnavailable = false;
   async function visit(orderUuid, revision, customer) {
     const request = {
       params: { orderUuid, quoteRevision: String(revision) },
@@ -68,6 +69,7 @@ export async function testPaypalQuoteLifecycle({ pool, paypalOrder, alternateOrd
       const id = parsed.pathname.match(/^\/v2\/invoicing\/invoices\/(INV2(?:-[A-Z0-9]{4}){4})$/)?.[1];
       assert(invoices.has(id));
       reads++;
+      if (serviceUnavailable) return new Response(null, { status: 503 });
       return Response.json(invoices.get(id));
     };
     const owner = { kind: 'customer', customerId };
@@ -82,14 +84,33 @@ export async function testPaypalQuoteLifecycle({ pool, paypalOrder, alternateOrd
     const twins = await Promise.all([linkPaypalInvoice(uuid, link), linkPaypalInvoice(uuid, link)]);
     assert.deepEqual(twins.map(x => x.unchanged).sort(), [false, true]);
     assert.equal((await getOrderQuote(paypalOrder.order_id)).paypalInvoiceLinked, true);
-    const buyerQuery = '{ bankTransferPaymentOrder { bankTransferQuote { paypalPaymentUrl } } }';
+    const buyerQuery = '{ bankTransferPaymentOrder { bankTransferQuote { paypalPaymentUrl repeated: paypalPaymentUrl wisePaymentUrl } } }';
+    const buyerContext = { bankTransferGuestUuid: uuid, customer: { customer_id: customerId } };
+    const beforeViews = reads;
+    const list = await runGraphql('{ bankTransferCustomerPayments { bankTransferQuote { status } } }', buyerContext);
+    assert.equal(list.errors, undefined);
+    assert(list.data.bankTransferCustomerPayments.some(row => row.bankTransferQuote?.status === 'confirmed'));
     const guestView = await runGraphql(buyerQuery, { bankTransferGuestUuid: uuid });
     assert.equal(guestView.errors, undefined);
     assert.equal(guestView.data.bankTransferPaymentOrder.bankTransferQuote.paypalPaymentUrl, null);
-    const ownedView = await runGraphql(buyerQuery, { bankTransferGuestUuid: uuid, customer: { customer_id: customerId } });
+    assert.equal(reads, beforeViews, 'Lists and unauthorized viewers must not request a PayPal invoice');
+    const ownedView = await runGraphql(buyerQuery, buyerContext);
     assert.equal(ownedView.errors, undefined);
     assert(ownedView.data.bankTransferPaymentOrder.bankTransferQuote.paypalPaymentUrl.includes(uuid));
     assert(!ownedView.data.bankTransferPaymentOrder.bankTransferQuote.paypalPaymentUrl.includes('paypal.com'));
+    assert.equal(ownedView.data.bankTransferPaymentOrder.bankTransferQuote.repeated, ownedView.data.bankTransferPaymentOrder.bankTransferQuote.paypalPaymentUrl);
+    assert.equal(reads, beforeViews + 1, 'Both aliases of the selected field share a single PayPal read');
+    assert(quote.wisePaymentUrl);
+    for (const state of ['PAID', 'CANCELLED', 'unavailable']) {
+      invoice.status = state === 'unavailable' ? 'UNPAID' : state;
+      serviceUnavailable = state === 'unavailable';
+      const view = await runGraphql(buyerQuery, buyerContext);
+      assert.equal(view.errors, undefined);
+      assert.equal(view.data.bankTransferPaymentOrder.bankTransferQuote.paypalPaymentUrl, null);
+      assert.equal(view.data.bankTransferPaymentOrder.bankTransferQuote.wisePaymentUrl, quote.wisePaymentUrl);
+    }
+    serviceUnavailable = false;
+    invoice.status = 'UNPAID';
     process.env.SHUSHA_PAYPAL_ENV = 'live';
     const mismatchedView = await runGraphql(buyerQuery, { bankTransferGuestUuid: uuid, customer: { customer_id: customerId } });
     assert.equal(mismatchedView.errors, undefined);

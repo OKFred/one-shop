@@ -8,7 +8,7 @@ export default function BankTransferConfirmation({ order, setting }) {
   return (
     <section className="border rounded border-divider p-6 mb-8">
       <h2 className="mb-4">Order request #{order.orderNumber} received</h2>
-      <p className="mb-4"><strong>{order.paymentStatus?.code === 'pending' ? 'Payment pending — no payment has been collected.' : `Payment status: ${order.paymentStatus?.name || order.paymentStatus?.code}`}</strong></p>
+      <p className="mb-4"><strong>{order.paymentStatus?.code === 'pending' ? 'Payment receipt has not yet been confirmed.' : `Payment status: ${order.paymentStatus?.name || order.paymentStatus?.code}`}</strong></p>
       {open && <BankTransferPaymentPanel quote={order.bankTransferQuote} setting={setting} paid={order.paymentStatus?.code === 'paid'} />}
       {open && order.bankTransferPaymentUrl && <p className="mt-4"><a href={order.bankTransferPaymentUrl}>View your payment page</a></p>}
     </section>

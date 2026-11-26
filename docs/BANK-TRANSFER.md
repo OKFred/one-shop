@@ -52,6 +52,7 @@ merchant and buyer before enabling the live configuration.
 
 1. Confirm the order's merchandise quote in the order editor. Create a PayPal
    invoice in the same currency for the exact confirmed merchandise amount.
+   Include the configured merchant email in the invoice's business information.
    Copy the versioned order reference from the editor into PayPal's **Reference**
    field. Leave shipping, tips and partial payments off. Use the share-link
    option without customer email or reminders.
