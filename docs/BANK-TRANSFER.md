@@ -42,6 +42,37 @@ stock and catalog event subscribers remain intact. No replacement email service
 reports a suppressed notification as sent. Customer-initiated password resets
 are a separate native flow.
 
+## PayPal invoices for confirmed quotes
+
+The checkout displays **PayPal · WIP** by default. To use the invoice option,
+configure the server using the blank settings in `deployment/runtime.env.example`.
+Use merchant-owned Invoicing credentials and the PayPal email that appears as
+the invoicer. Select the environment explicitly. Test with a separate sandbox
+merchant and buyer before enabling the live configuration.
+
+1. Confirm the order's merchandise quote in the order editor. Create a PayPal
+   invoice in the same currency for the exact confirmed merchandise amount.
+   Include the configured merchant email in the invoice's business information.
+   Copy the versioned order reference from the editor into PayPal's **Reference**
+   field. Leave shipping, tips and partial payments off. Use the share-link
+   option without customer email or reminders.
+2. Enter the PayPal invoice ID on that order. SHUSHA verifies the invoice using
+   the merchant account and stores the binding for that quote revision. The buyer
+   opens **Pay with PayPal** from their payment page. The server checks access,
+   current quote and current invoice before redirecting to PayPal.
+3. If the quote changes, first cancel the previously linked unpaid invoice in
+   PayPal. A buyer can retain the original PayPal URL. When reissuing identical
+   terms, request a new quote revision in the order editor.
+4. Check the actual incoming funds before selecting **PayPal** to record the
+   receipt. Use the PayPal payment transaction ID. The invoice link, the buyer's
+   return and the sandbox flow alone do not register a receipt.
+
+Migration `1.0.4` records invoice bindings separately and identifies the receipt
+channel. Existing receipts default to the bank channel. Rehearse on a fresh
+isolated production copy before deploying. Keep the provider gate off until
+the intended merchant, environment and an order-specific payable link have
+been verified through a controlled rollout.
+
 ## Customer access and icons
 
 `/payment/:orderUuid` preserves old UUID links as bearer capabilities. Its
@@ -66,8 +97,7 @@ runtime icon API request. Upstream sources:
 
 ## Database migration and acceptance
 
-The existing `shusha_payment_quote`, audit and receipt tables retain their schema
-and IDs. Extension migration `1.0.1` runs after core v2 migrations, creates its own
+Extension migration `1.0.1` runs after core v2 migrations, creates its own
 worldwide quote zone and corrects core's legacy `manual_quote` provider backfill
 to `shusha`, without rewriting amounts, quote versions or shipment state.
 Persisted carts must select the new method again if their old provider snapshot

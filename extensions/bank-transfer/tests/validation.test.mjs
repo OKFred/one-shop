@@ -4,10 +4,26 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { money, usdMoney, currency, receiptReference, paymentLink, openLink, validateOrderUuid } from '../src/services/paymentValidation.js';
-import { orderAccess, canonicalOrderUuid, authenticatedCustomerId } from '../src/services/paymentAccess.js';
+import { orderAccess, canonicalOrderUuid, authenticatedCustomerId, canOpenPaypalInvoice, paypalBuyerAccess } from '../src/services/paymentAccess.js';
 import { configurationReadiness, loadReceivingConfig } from '../src/services/receivingConfig.js';
 
 const uuid = '45e9fccd-00dc-4f04-a72e-d08622dbe520';
+
+test('PayPal invoice access follows order ownership and the original guest checkout session', () => {
+  const member = { customer_id: 9, sid: 'session1' };
+  const guest = { customer_id: null, sid: 'session1' };
+  const current = paypalBuyerAccess({ customer_id: 9 }, 'session1');
+  const foreign = paypalBuyerAccess({ customerId: 3 }, 'session2');
+  const anonymous = paypalBuyerAccess(null);
+  assert.equal(canOpenPaypalInvoice(member, current), true);
+  assert.equal(canOpenPaypalInvoice(member, anonymous), false);
+  assert.equal(canOpenPaypalInvoice(member, foreign), false);
+  assert.equal(canOpenPaypalInvoice(guest, current), true);
+  assert.equal(canOpenPaypalInvoice(guest, anonymous), true);
+  assert.equal(canOpenPaypalInvoice(guest, foreign), false);
+  assert.equal(canOpenPaypalInvoice(member, paypalBuyerAccess({}, 'session1')), false);
+  assert.equal(canOpenPaypalInvoice({}, anonymous), false);
+});
 test('Accept canonical and compact UUIDs, reject arbitrary order references', () => {
   assert.equal(validateOrderUuid(uuid), uuid);
   assert.equal(canonicalOrderUuid(uuid.replaceAll('-', '')), uuid);

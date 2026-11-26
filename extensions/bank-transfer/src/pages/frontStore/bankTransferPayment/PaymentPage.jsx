@@ -8,7 +8,7 @@ export default function PaymentPage({ order = null, setting }) {
     <main className="page-width shusha-order-payment">
       <h1>{order?.paymentMethod === 'banktransfer' ? `Order #${order.orderNumber}` : 'Order payment'}</h1>
       {order?.paymentMethod === 'banktransfer' ? (
-        <BankTransferPaymentPanel quote={order.bankTransferQuote} setting={setting} />
+        <BankTransferPaymentPanel quote={order.bankTransferQuote} setting={setting} paid={order.paymentStatusCode === 'paid'} />
       ) : (
         <p>Payment instructions are unavailable. Please contact SHUSHA for help with your order.</p>
       )}
@@ -20,6 +20,7 @@ PaymentPage.propTypes = {
   order: PropTypes.shape({
     orderNumber: PropTypes.string.isRequired,
     paymentMethod: PropTypes.string,
+    paymentStatusCode: PropTypes.string,
     bankTransferQuote: paymentQuoteType
   }),
   setting: PropTypes.object.isRequired
@@ -27,8 +28,8 @@ PaymentPage.propTypes = {
 export const layout = { areaId: 'content', sortOrder: 10 };
 export const query = `query Query {
   order: bankTransferPaymentOrder {
-    orderNumber paymentMethod
-    bankTransferQuote { status revision currency amount merchandiseUsd reference wisePaymentUrl bankDetails { label value } receiptConfirmedAt shippingDeferred }
+    orderNumber paymentMethod paymentStatusCode
+    bankTransferQuote { status revision currency amount merchandiseUsd reference wisePaymentUrl paypalPaymentUrl bankDetails { label value } receiptConfirmedAt shippingDeferred }
   }
-  setting { bankTransferContactSriLanka bankTransferContactChina }
+  setting { bankTransferPaypalEnabled bankTransferContactSriLanka bankTransferContactChina }
 }`;

@@ -4,6 +4,11 @@ type BankTransferReceivingConfig {
   openLinkReady: Boolean!
 }
 
+extend type BankTransferQuote {
+  paypalInvoiceLinked: Boolean!
+  paypalInvoiceReference: String!
+}
+
 extend type Query {
   bankTransferReceivingConfig: BankTransferReceivingConfig!
 }

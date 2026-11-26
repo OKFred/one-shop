@@ -11,6 +11,7 @@ type BankTransferQuote {
   merchandiseUsd: String!
   reference: String!
   wisePaymentUrl: String
+  paypalPaymentUrl: String
   bankDetails: [BankTransferBankDetail!]!
   receiptConfirmedAt: String
   shippingDeferred: Boolean!
@@ -30,6 +31,7 @@ extend type Cart {
 type BankTransferPaymentOrder {
   orderNumber: String!
   paymentMethod: String!
+  paymentStatusCode: String!
   bankTransferQuote: BankTransferQuote
   bankTransferPaymentUrl: String!
 }

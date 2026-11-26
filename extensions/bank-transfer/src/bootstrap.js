@@ -1,16 +1,18 @@
 import { addProcessor } from '@evershop/evershop/lib/util/registry';
 import { getConfig } from '@evershop/evershop/lib/util/getConfig';
 import { registerShippingProvider, registerPaymentMethod, hookBeforeCheckout, hookBeforeSaveOrder, hookBeforeSaveShippingAddress } from '@evershop/evershop/checkout/services';
-import { resolveOrderStatus } from '@evershop/evershop/oms/services';
+import { hookBeforeUpdatePaymentStatusToCancel, resolveOrderStatus } from '@evershop/evershop/oms/services';
 import { provinces } from '@evershop/evershop/lib/locale/provinces';
 import { isEnabled, displayName } from './services/settings.js';
 import { manualQuoteProvider, PROVIDER_CODE, CODE, validateQuoteAddress } from './services/manualQuote.js';
 import { installAutomaticEmailPolicy } from './services/automaticEmails.js';
 import { shippingPreferenceField, saveCheckoutShippingPreference } from './services/shippingPreference.js';
 import { normalizeShippingPreference } from './services/shippingPreferenceValidation.js';
+import { beforeCancelOrderPayment } from './services/orderPayments.js';
 
 export default () => {
   installAutomaticEmailPolicy();
+  hookBeforeUpdatePaymentStatusToCancel(beforeCancelOrderPayment);
   addProcessor('cartFields', (fields) => fields.concat([shippingPreferenceField]), 30);
   hookBeforeCheckout(async (cartUuid, data) => {
     if (await isEnabled()) await saveCheckoutShippingPreference(cartUuid, data);
