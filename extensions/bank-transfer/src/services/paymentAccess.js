@@ -5,6 +5,20 @@ export function authenticatedCustomerId(context) {
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
+export function paypalBuyerAccess(customer, sid) {
+  if (!customer) return { kind: 'guest' };
+  return { kind: 'customer', customerId: authenticatedCustomerId({ customer }), sid };
+}
+
+export function canOpenPaypalInvoice(order, access) {
+  if (!order || !access || !Object.hasOwn(order, 'customer_id')) return false;
+  if (access.kind === 'guest') return order.customer_id === null;
+  if (access.kind !== 'customer' || !Number.isSafeInteger(access.customerId) || access.customerId < 1) return false;
+  if (order.customer_id !== null) return Number(order.customer_id) === access.customerId;
+  // A guest can sign in after placing the order in this checkout session.
+  return typeof access.sid === 'string' && access.sid.length > 0 && access.sid === order.sid;
+}
+
 export function canonicalOrderUuid(uuid) {
   validateOrderUuid(uuid);
   const compact = uuid.replaceAll('-', '').toLowerCase();

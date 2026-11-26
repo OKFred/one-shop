@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
+import { testPaypalQuoteLifecycle } from './paypalInvoiceLifecycle.mjs';
 
 // No dotenv auto-loading: the caller supplies a disposable DB explicitly.
 const expected = process.env.BANK_TRANSFER_TEST_DB;
@@ -39,6 +40,7 @@ const { default: migrate } = await import('../dist/migration/Version-1.0.0.js');
 const { default: migrateShipping } = await import('../dist/migration/Version-1.0.1.js');
 const { default: migratePreference } = await import('../dist/migration/Version-1.0.2.js');
 const { default: migrateGlobalReceipts } = await import('../dist/migration/Version-1.0.3.js');
+const { default: migratePaypalInvoices } = await import('../dist/migration/Version-1.0.4.js');
 const { saveCheckoutShippingPreference } = await import('../dist/services/shippingPreference.js');
 const { createShippingPreferenceAccessMiddleware } = await import('../dist/services/shippingPreferenceAccess.js');
 const { getConfig } = await import('@evershop/evershop/lib/util/getConfig');
@@ -85,10 +87,11 @@ try {
   await migrateShipping(pool); await migrateShipping(pool);
   await migratePreference(pool); await migratePreference(pool);
   await migrateGlobalReceipts(pool); await migrateGlobalReceipts(pool);
+  await migratePaypalInvoices(pool); await migratePaypalInvoices(pool);
   const zone = (await pool.query('SELECT z.shipping_zone_id,p.is_enabled FROM shipping_zone z JOIN shipping_zone_provider p ON p.zone_id=z.shipping_zone_id WHERE z.uuid=$1 AND p.provider_code=$2', ['ed8f7156-3636-4d8b-8e64-0e894795d7f6', 'shusha'])).rows[0];
   assert.equal(zone.is_enabled, true); checks++;
   assert.equal(Number((await pool.query('SELECT count(*) AS count FROM shipping_zone_country WHERE zone_id=$1', [zone.shipping_zone_id])).rows[0].count), countries.length); checks++;
-  for (const routeId of ['bankTransferConfirmQuote', 'bankTransferRecordReceipt']) { assert.equal(getRoutes().find((r) => r.id === routeId)?.access, 'private'); checks++; }
+  for (const routeId of ['bankTransferConfirmQuote', 'bankTransferRecordReceipt', 'bankTransferLinkPaypalInvoice']) { assert.equal(getRoutes().find((r) => r.id === routeId)?.access, 'private'); checks++; }
   const context = { currency: 'USD', destination: { country: 'GB', province: 'GB-ENG' } };
   assert.equal((await manualQuoteProvider.getMethods(context))[0].cost, 0); checks++;
   const validateDetached = manualQuoteProvider.validateMethod;
@@ -101,14 +104,14 @@ try {
   }
   assert.deepEqual((await getAvailablePaymentMethods({ cartTotal: 9.98 })).map((p) => p.code), ['banktransfer']); checks++;
 
-  const amounts = [9.98, 14.99, 19.98];
+  const amounts = [9.98, 14.99, 19.98, 8.99, 8.99];
   customerId = (await pool.query('INSERT INTO customer(email,password,full_name,group_id) VALUES($1,$2,$3,NULL) RETURNING customer_id', [`bank-${crypto.randomUUID()}@example.invalid`, 'SYNTHETIC-NEVER-LOGIN', 'Synthetic fixture'])).rows[0].customer_id;
   cartId = (await pool.query(`INSERT INTO cart(currency,status,sub_total,sub_total_incl_tax,sub_total_with_discount,sub_total_with_discount_incl_tax,total_qty,tax_amount,tax_amount_before_discount,shipping_tax_amount,grand_total) VALUES('USD',FALSE,0,0,0,0,0,0,0,0,0) RETURNING cart_id`)).rows[0].cart_id;
   for (const amount of amounts) {
     const order = (await pool.query(`INSERT INTO "order"(uuid,order_number,cart_id,currency,status,payment_status,shipment_status,payment_method,payment_method_name,shipping_fee_excl_tax,shipping_fee_incl_tax,sub_total,sub_total_incl_tax,sub_total_with_discount,sub_total_with_discount_incl_tax,total_qty,tax_amount,tax_amount_before_discount,shipping_tax_amount,grand_total,customer_email,shipping_method_data,no_shipping_required) VALUES($1,$2,$3,'USD','new','pending','pending','banktransfer','T/T',0,0,$4,$4,$4,$4,1,0,0,0,$4,'fixture@example.invalid',$5,FALSE) RETURNING *`, [crypto.randomUUID(), `TEST-${crypto.randomUUID()}`, cartId, amount, JSON.stringify({ provider_code: 'shusha', method_code: 'manual_quote', snapshot: { name: 'Shipping quotation pending', cost: 0 } })])).rows[0];
     created.push(order);
   }
-  const [first, second, third] = created;
+  const [first, second, third, paypalOrder, alternateOrder] = created;
   const legacyIds = created.map((order) => order.order_id);
   const beforePreferenceMigration = (await pool.query('SELECT * FROM "order" WHERE order_id=ANY($1::int[]) ORDER BY order_id', [legacyIds])).rows;
   assert(beforePreferenceMigration.every((order) => order.shusha_shipping_preference === null)); checks++;
@@ -183,8 +186,11 @@ try {
   const adminOrder = await graphql({ schema: adminSchema, source: `{ order(uuid:"${first.uuid}") { orderNumber bankTransferQuote { status } } bankTransferReceivingConfig { ready currencies } }`, contextValue: { pool, user: { user_id: 1 } } });
   assert.equal(adminOrder.errors, undefined); assert.equal(adminOrder.data.order.orderNumber, first.order_number); assert.equal(adminOrder.data.bankTransferReceivingConfig.ready, true); checks += 3;
 
+  await testPaypalQuoteLifecycle({ pool, paypalOrder, alternateOrder, customerId, runGraphql });
+
   // This product is created solely for the native checkout path. Its native
   // catalog price remains source USD while the item/order price is retail USD.
+  const expectedRetailUsd = 4.99; // USD 3.05 × 1.5 rounded up to the smallest .99.
   const fixtureKey = crypto.randomUUID();
   productId = (await pool.query(`INSERT INTO product(sku,price,weight,status,visibility,group_id) VALUES($1,3.05,0.1,TRUE,FALSE,(SELECT attribute_group_id FROM attribute_group ORDER BY attribute_group_id LIMIT 1)) RETURNING product_id`, [`SHUSHA-LTEST-${fixtureKey}`])).rows[0].product_id;
   await pool.query('INSERT INTO product_description(product_description_product_id,name,url_key) VALUES($1,$2,$3)', [productId, 'Synthetic shipping preference fixture', `synthetic-preference-${fixtureKey}`]);
@@ -206,7 +212,7 @@ try {
     const id = await saveCart(cart);
     nativeCartIds.push(id);
     const row = (await pool.query('SELECT * FROM cart WHERE cart_id=$1', [id])).rows[0];
-    assert.equal(Number(row.grand_total), 3.99); checks++;
+    assert.equal(Number(row.grand_total), expectedRetailUsd); checks++;
     return { cart, row, sid };
   };
   const customCart = await newFixtureCart();
@@ -242,7 +248,7 @@ try {
   created.push(nativeCustomOrder);
   nativeOrderAddressIds.push(nativeCustomOrder.shipping_address_id, nativeCustomOrder.billing_address_id);
   assert.equal(nativeCustomOrder.shusha_shipping_preference, 'Synthetic Express');
-  assert.equal(Number(nativeCustomOrder.grand_total), 3.99);
+  assert.equal(Number(nativeCustomOrder.grand_total), expectedRetailUsd);
   assert.equal(nativeCustomOrder.currency, 'USD');
   assert.equal(Number(nativeCustomOrder.shipping_fee_excl_tax), 0);
   assert.equal(Number(nativeCustomOrder.shipping_fee_incl_tax), 0);
@@ -270,7 +276,7 @@ try {
   created.push(nativeDefaultOrder);
   nativeOrderAddressIds.push(nativeDefaultOrder.shipping_address_id, nativeDefaultOrder.billing_address_id);
   assert.equal(nativeDefaultOrder.shusha_shipping_preference, null);
-  assert.equal(Number(nativeDefaultOrder.grand_total), 3.99);
+  assert.equal(Number(nativeDefaultOrder.grand_total), expectedRetailUsd);
   assert.equal((await pool.query('SELECT shusha_shipping_preference FROM cart WHERE cart_id=$1', [defaultCart.row.cart_id])).rows[0].shusha_shipping_preference, null);
   assert.equal((await pool.query('SELECT qty FROM product_inventory WHERE product_inventory_product_id=$1', [productId])).rows[0].qty, 997); checks += 4;
 

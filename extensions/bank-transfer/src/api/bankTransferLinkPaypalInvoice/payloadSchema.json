@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "invoiceId": {"type": "string", "pattern": "^INV2-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$"},
+    "quoteRevision": {"type": "integer", "minimum": 1}
+  },
+  "required": ["invoiceId", "quoteRevision"]
+}

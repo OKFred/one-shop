@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import { BankTransferContacts, BankTransferDetails } from './BankTransferDetails.js';
 import './BankTransferPaymentPanel.scss';
 import BrandIcon from './BrandIcon.js';
+import PaypalPaymentOption from './PaypalPaymentOption.js';
 
 export const paymentQuoteType = PropTypes.shape({
   status: PropTypes.string.isRequired,
@@ -12,6 +13,7 @@ export const paymentQuoteType = PropTypes.shape({
   merchandiseUsd: PropTypes.string.isRequired,
   reference: PropTypes.string.isRequired,
   wisePaymentUrl: PropTypes.string,
+  paypalPaymentUrl: PropTypes.string,
   bankDetails: PropTypes.arrayOf(PropTypes.shape({
     label: PropTypes.string.isRequired,
     value: PropTypes.string.isRequired
@@ -20,9 +22,10 @@ export const paymentQuoteType = PropTypes.shape({
   shippingDeferred: PropTypes.bool
 });
 
-export default function BankTransferPaymentPanel({ quote = null, setting }) {
+export default function BankTransferPaymentPanel({ quote = null, setting, paid = false }) {
+  if (paid && quote?.status !== 'paid') return <p>Payment received.</p>;
   if (!quote || !['confirmed', 'paid'].includes(quote.status)) {
-    return <BankTransferDetails setting={setting} />;
+    return <div className="shusha-payment-panel"><PaypalPaymentOption enabled={setting.bankTransferPaypalEnabled} /><BankTransferDetails setting={setting} /></div>;
   }
   const received = quote.status === 'paid';
   return (
@@ -39,6 +42,7 @@ export default function BankTransferPaymentPanel({ quote = null, setting }) {
         </p>
       ) : (
         <>
+          <PaypalPaymentOption enabled={setting.bankTransferPaypalEnabled} quote={quote} />
           {quote.wisePaymentUrl && (
             <div className="shusha-wise-payment">
               <a className="shusha-wise-payment-button" href={quote.wisePaymentUrl} target="_blank" rel="noopener noreferrer">
@@ -61,7 +65,7 @@ export default function BankTransferPaymentPanel({ quote = null, setting }) {
               <p>Your bank or Wise may charge a transfer fee. Check the amount the recipient will receive before confirming.</p>
             </section>
           )}
-          <p className="shusha-payment-status">Your order stays unpaid until our team verifies that the confirmed amount has arrived. Opening Wise or returning to this page does not confirm payment.</p>
+          <p className="shusha-payment-status">Your order stays unpaid until our team verifies that the confirmed amount has arrived.</p>
         </>
       )}
       <BankTransferContacts setting={setting} />
@@ -71,5 +75,6 @@ export default function BankTransferPaymentPanel({ quote = null, setting }) {
 
 BankTransferPaymentPanel.propTypes = {
   quote: paymentQuoteType,
+  paid: PropTypes.bool,
   setting: PropTypes.object.isRequired
 };

@@ -1,3 +1,8 @@
 
 import { configurationReadiness } from '../../../services/receivingConfig.js';
-export default { Query: { bankTransferReceivingConfig: () => configurationReadiness() } };
+import { invoiceReference } from '../../../services/paypalInvoices.js';
+
+export default {
+  Query: { bankTransferReceivingConfig: () => configurationReadiness() },
+  BankTransferQuote: { paypalInvoiceReference: (quote) => invoiceReference(quote) }
+};

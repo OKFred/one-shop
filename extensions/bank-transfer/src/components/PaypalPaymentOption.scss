@@ -1,0 +1,38 @@
+.shusha-paypal-option {
+  display: grid;
+  gap: 0.5rem;
+  overflow-wrap: anywhere;
+
+  > a, > button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    justify-self: start;
+    box-sizing: border-box;
+    max-width: 100%;
+    min-height: 48px;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    line-height: 1.5;
+  }
+
+  > button:disabled {
+    background: #e9e9e9;
+    border: 1px solid #bcbcbc;
+    color: #514f4f;
+    cursor: not-allowed;
+  }
+
+  > a {
+    background: #003087;
+    color: white;
+    text-decoration: none;
+    &:hover { background: #00246a; }
+    &:focus-visible { outline: 3px solid #003087; outline-offset: 3px; }
+  }
+
+  @media (max-width: 480px) {
+    > a, > button { justify-self: stretch; }
+  }
+}
